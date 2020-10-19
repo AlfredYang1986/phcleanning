@@ -92,6 +92,15 @@ if __name__ == '__main__':
 
 	# df_match.show()
 	# df_match.printSchema()
+	
+	# @func.udf(returnType=StringType())
+	# def pack_id(in_value):
+	# 	return in_value.lstrip("0")
+	
+	# # packid去掉0
+	
+	# df_match = df_match.withColumn("PACK_ID_CHECK", pack_id("PACK_ID_CHECK"))
+	# df_match = df_match.withColumn("PACK_ID_STANDARD", pack_id("PACK_ID_STANDARD"))
 
 	df_match = df_match.withColumn("check", df_match.PACK_ID_CHECK == df_match.PACK_ID_STANDARD)
 	df_match = df_match.orderBy("id").drop("ORIGIN", "STANDARD")
@@ -99,9 +108,9 @@ if __name__ == '__main__':
 	df_replace = df_match.where((df_match.check))
 
 	df_no_replace = df_match.where(~df_match.check)
-	df_no_replace.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/no_replace")
+	df_no_replace.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/no_replace")
 
 	print(df_replace.count())
 	df_replace = df_replace.where(df_replace.SIMILARITY > 0.7)
 	print(df_replace.count())
-	df_replace.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/replace")
+	df_replace.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/replace")
