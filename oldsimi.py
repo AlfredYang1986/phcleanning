@@ -22,7 +22,7 @@ import jieba.posseg as pseg
 import jieba.analyse as analyse
 
 
-@udf(returnType=DoubleType())
+@udf(returnType=IntegerType())
 def similarity_cal_udf(origin, standard):
 
 	def dosage(in_value, check_value):
@@ -335,10 +335,11 @@ def similarity_cal_udf(origin, standard):
 	 		elif (len(lsta) == 2) and (len(lstb) == 2) and (lsta[0] == lstb[1]) and (lsta[1] == lstb[0]):
 	 			return 0
 	 		else:
-	 			return (len(new_check_spec) - edit_distance(new_in_spec, new_check_spec))/len(new_check_spec)
+	 		# 	return (len(new_check_spec) - edit_distance(new_in_spec, new_check_spec))/len(new_check_spec)
+	 			return edit_distance(new_in_spec, new_check_spec)
 	 	else:
-	 	    return (len(new_check_spec) - edit_distance(new_in_spec, new_check_spec))/len(new_check_spec)
-	#  		return (new_check_spec - edit_distance(new_in_spec, new_check_spec))/new_check_spec
+	 	 #   return (len(new_check_spec) - edit_distance(new_in_spec, new_check_spec))/len(new_check_spec)
+	 		return edit_distance(new_in_spec, new_check_spec)
 
 
 	def edit_distance(in_value, check_value):
@@ -358,14 +359,23 @@ def similarity_cal_udf(origin, standard):
 		return dp[m][n]
 
 
-	mn = 0 if len(standard[0]) == 0 else (len(standard[0]) - mole_name(origin[0], standard[0]))/len(standard[0])
-	pd = 0 if len(standard[1]) == 0 else (len(standard[1]) - product(origin[1], standard[1]))/len(standard[1])
-	dg = 0 if len(standard[2]) == 0 else (len(standard[2]) - dosage(origin[2], standard[2]))/len(standard[2])
-	sp = 0 if len(standard[3]) == 0 else spec(origin[3], standard[3])
-	pq = 0 if len(standard[4]) == 0 else (len(standard[4]) - pack_qty(origin[4], standard[4]))/len(standard[4])
-	mfc = 1 - mnf_ch(origin[5], standard[5])/100
-	mfe = 1 - mnf_en(origin[5], standard[6])/100
-	return 0.1 * dg + 0.1 * sp + 0.6 * pq + 0.1 * mn + 0.1 * pd + 0.1 * max(mfc, mfe)
+	mn = mole_name(origin[0], standard[0])
+	pd = product(origin[1], standard[1])
+	dg = dosage(origin[2], standard[2])
+	sp = spec(origin[3], standard[3])
+	pq = pack_qty(origin[4], standard[4])
+	mfc = mnf_ch(origin[5], standard[5])
+	mfe = mnf_en(origin[5], standard[6])
+	return dg + 10*sp+ 60*pq + min(mfc, mfe) + pd
+
+# 	mn = 0 if len(standard[0]) == 0 else (len(standard[0]) - mole_name(origin[0], standard[0]))/len(standard[0])
+# 	pd = 0 if len(standard[1]) == 0 else (len(standard[1]) - product(origin[1], standard[1]))/len(standard[1])
+# 	dg = 0 if len(standard[2]) == 0 else (len(standard[2]) - dosage(origin[2], standard[2]))/len(standard[2])
+# 	sp = 0 if len(standard[3]) == 0 else spec(origin[3], standard[3])
+# 	pq = 0 if len(standard[4]) == 0 else (len(standard[4]) - pack_qty(origin[4], standard[4]))/len(standard[4])
+# 	mfc = 1 - mnf_ch(origin[5], standard[5])/100
+# 	mfe = 1 - mnf_en(origin[5], standard[6])/100
+# 	return 0.1 * dg + 0.1 * sp + 0.6 * pq + 0.1 * mn + 0.1 * pd + 0.1 * max(mfc, mfe)
 
 
 def similarity(spark, df_cleanning, df_standard):
