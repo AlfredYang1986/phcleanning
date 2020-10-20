@@ -13,12 +13,17 @@ import os
 from pyspark.sql import SparkSession
 from dataparepare import *
 from interfere import *
-from similarity import *
+from feature import *
+# from similarity import *
 # from oldsimi import *
 from pyspark.sql.types import *
 from pyspark.sql.functions import desc
 from pyspark.sql.functions import rank
 from pyspark.sql import Window
+from pyspark.ml.linalg import Vectors, VectorUDT
+# from pyspark.ml.classification import MultilayerPerceptronClassifier
+from pyspark.ml.classification import MultilayerPerceptronClassificationModel
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 
 
 def prepare():
@@ -48,9 +53,7 @@ def prepare():
 
 
 @udf(returnType=IntegerType())
-def check_similarity(packid_check, packid_standard, similarity):
-	# if v < 0.7:
-	# 	return 0
+def check_similarity(packid_check, packid_standard):
 	if (packid_check == "") & (packid_standard == ""):
 		return 1
 	elif len(packid_check) == 0:
@@ -71,43 +74,35 @@ if __name__ == '__main__':
 	spark = prepare()
 	df_standard = load_standard_prod(spark)
 	df_cleanning = load_cleanning_prod(spark)
-	# df_cleanning = df_cleanning.limit(100)
+	df_cleanning = df_cleanning.limit(100)
 	df_interfere = load_interfere_mapping(spark)
 
 	# 1. human interfere
 	df_cleanning = human_interfere(spark, df_cleanning, df_interfere)
 	df_cleanning.persist()
 
-	# 2. 以MOLE_NAME为主键JOIN
-	df_result = similarity(spark, df_cleanning, df_standard)
+	# 2. cross join
+	df_result = feature_cal(spark, df_cleanning, df_standard)
 	df_result.persist()
-	df_result.show()
-	print(df_result.count())
 
+	vec_udf = udf(lambda vs: Vectors.dense(vs), VectorUDT())
+	similarity_udf = udf(lambda vs: 0.1 * vs[2] + 0.1 * vs[3] + 0.5 * vs[4] + 0.1 * vs[0] + 0.1 * vs[1] + 0.1 * vs[5], DoubleType())
+	df_result = df_result.withColumn("similarity", similarity_udf(df_result.featureCol))
+	df_result = df_result.where(df_result.similarity > 0.7)
+	df_result = df_result.withColumn("features", vec_udf(df_result.featureCol)) \
+					.withColumn("label", check_similarity(df_result.PACK_ID_CHECK, df_result.PACK_ID_STANDARD))
+	df_result.persist()
+
+	df_validate = df_result.select("id", "label", "features").orderBy("id")
 	# 3. 对每个需要匹配的值做猜想排序
-	windowSpec  = Window.partitionBy("id").orderBy(desc("SIMILARITY"))
-	# windowSpec  = Window.partitionBy("id").orderBy("SIMILARITY")
+	df_validate.show()
 
-	df_match = df_result.withColumn("RANK", rank().over(windowSpec))
-	df_match = df_match.where(df_match.RANK <= 5)
+	# 4. load model
+	model = MultilayerPerceptronClassificationModel.load("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/model")
 
-	# df_match.show()
-	df_match.persist()
-	df_match.show()
-	print(df_match.count())
-	# df_match.printSchema()
-
-	df_match = df_match.withColumn("check", check_similarity(df_match.PACK_ID_CHECK, df_match.PACK_ID_STANDARD, df_match.SIMILARITY))
-	df_match.show(5)
-	df_match = df_match.orderBy("id").drop("ORIGIN", "STANDARD")
-	df_match.persist()
-	df_match.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.3/all")
-
-	df_replace = df_match.filter(df_match.check == 1)
-
-	df_no_replace = df_match.filter(df_match.check == 0)
-	df_no_replace.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.3/no_replace")
-
-	print(df_replace.count())
-	print(df_no_replace.count())
-	df_replace.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.3/replace")
+	# compute accuracy on the test set
+	result = model.transform(df_validate)
+	predictionAndLabels = result.select("id", "prediction", "label").orderBy("id")
+	predictionAndLabels.show()
+	evaluator = MulticlassClassificationEvaluator(metricName="accuracy")
+	print("Test set accuracy = " + str(evaluator.evaluate(predictionAndLabels)))
