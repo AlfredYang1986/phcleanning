@@ -13,8 +13,8 @@ import os
 from pyspark.sql import SparkSession
 from dataparepare import *
 from interfere import *
-# from similarity import *
-from oldsimi import *
+from similarity import *
+# from oldsimi import *
 from pyspark.sql.types import *
 from pyspark.sql.functions import desc
 from pyspark.sql.functions import rank
@@ -48,23 +48,23 @@ def prepare():
 
 
 @udf(returnType=IntegerType())
-def check_similarity(o, s, v):
-	if v < 0.7:
-		return 0
-	elif (o == "") & (s == ""):
+def check_similarity(packid_check, packid_standard, similarity):
+	# if v < 0.7:
+	# 	return 0
+	if (packid_check == "") & (packid_standard == ""):
 		return 1
-	elif len(o) == 0:
+	elif len(packid_check) == 0:
 		return 0
-	elif len(s) == 0:
+	elif len(packid_standard) == 0:
 		return 0
 	else:
 		try:
-			return int(o) == int(s)
+			if int(packid_check) == int(packid_standard):
+				return 1
+			else:
+				return 0
 		except ValueError:
 			return 0
-		finally:
-			return 0
-
 
 
 if __name__ == '__main__':
@@ -85,7 +85,8 @@ if __name__ == '__main__':
 	print(df_result.count())
 
 	# 3. 对每个需要匹配的值做猜想排序
-	windowSpec  = Window.partitionBy("id").orderBy("SIMILARITY")
+	windowSpec  = Window.partitionBy("id").orderBy(desc("SIMILARITY"))
+	# windowSpec  = Window.partitionBy("id").orderBy("SIMILARITY")
 
 	df_match = df_result.withColumn("RANK", rank().over(windowSpec))
 	df_match = df_match.where(df_match.RANK <= 5)
@@ -96,30 +97,28 @@ if __name__ == '__main__':
 	print(df_match.count())
 	# df_match.printSchema()
 
-	df_match = df_match.withColumn("check", df_match.PACK_ID_CHECK == df_match.PACK_ID_STANDARD)
+	df_match = df_match.withColumn("check", check_similarity(df_match.PACK_ID_CHECK, df_match.PACK_ID_STANDARD, df_match.SIMILARITY))
+	df_match.show(5)
 	df_match = df_match.orderBy("id").drop("ORIGIN", "STANDARD")
 	df_match.persist()
-	df_match.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/all")
+	df_match.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.3/all")
 
-	df_replace = df_match.where((df_match.check))
+	df_replace = df_match.filter(df_match.check == 1)
 
-	df_no_replace = df_match.where(~df_match.check)
-	df_no_replace.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/no_replace")
-
-	print(df_replace.count())
-	df_replace = df_replace.where(df_replace.SIMILARITY > 0.7)
-	print(df_replace.count())
-	df_replace.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/replace")
-	df_match = df_match.orderBy("id").drop("ORIGIN", "STANDARD")
-	df_match.persist()
-	df_match.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/all")
-
-	df_replace = df_match.where((df_match.check))
-
-	df_no_replace = df_match.where(~df_match.check)
-	df_no_replace.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/no_replace")
+	df_no_replace = df_match.filter(df_match.check == 0)
+	df_no_replace.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.3/no_replace")
 
 	print(df_replace.count())
-	df_replace = df_replace.where(df_replace.SIMILARITY > 0.7)
-	print(df_replace.count())
-	df_replace.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/replace")
+	# df_replace = df_replace.where(df_replace.SIMILARITY > 0.7)
+	print(df_no_replace.count())
+	df_replace.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.3/replace")
+	
+	# df_match = df_match.orderBy("id").drop("ORIGIN", "STANDARD")
+	# df_match.persist()
+	# df_match.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.3/all")
+	# df_no_replace.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.3/no_replace")
+
+	# print(df_replace.count())
+	# df_replace = df_replace.where(df_replace.SIMILARITY > 0.7)
+	# print(df_replace.count())
+	# df_replace.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/replace")

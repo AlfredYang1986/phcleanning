@@ -93,7 +93,7 @@ def similarity_cal_udf(origin, standard):
 	 	in_value = in_value.strip()
 	 	check_value = check_value.strip()
 
-	 	return 30*edit_distance(in_value, check_value)
+	 	return edit_distance(in_value, check_value)
 
 
 	def mnf_transform(mnf):
@@ -361,11 +361,12 @@ def similarity_cal_udf(origin, standard):
 	mn = 0 if len(standard[0]) == 0 else (len(standard[0]) - mole_name(origin[0], standard[0]))/len(standard[0])
 	pd = 0 if len(standard[1]) == 0 else (len(standard[1]) - product(origin[1], standard[1]))/len(standard[1])
 	dg = 0 if len(standard[2]) == 0 else (len(standard[2]) - dosage(origin[2], standard[2]))/len(standard[2])
-	sp = 0 if len(standard[3]) == 0 else spec(origin[3], standard[3])
+	sp = 0 if len(standard[3]) == 0 else (len(standard[3]) - spec(origin[3], standard[3]))/len(standard[3])
 	pq = 0 if len(standard[4]) == 0 else (len(standard[4]) - pack_qty(origin[4], standard[4]))/len(standard[4])
 	mfc = 1 - mnf_ch(origin[5], standard[5])/100
-	mfe = 1 - mnf_en(origin[5], standard[6])/100
-	return 0.1 * dg + 0.1 * sp + 0.6 * pq + 0.1 * mn + 0.1 * pd + 0.1 * max(mfc, mfe)
+	mfe = 0 if len(standard[6]) == 0 else (len(standard[6]) - mnf_en(origin[5], standard[6]))/len(standard[6])
+	
+	return 0.1 * dg + 0.1 * sp + 0.5 * pq + 0.1 * mn + 0.1 * pd + 0.1 * max(mfc, mfe)
 
 
 def similarity(spark, df_cleanning, df_standard):
