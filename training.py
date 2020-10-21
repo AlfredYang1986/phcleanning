@@ -13,12 +13,16 @@ import os
 from pyspark.sql import SparkSession
 from dataparepare import *
 from interfere import *
-from similarity import *
+from feature import *
+# from similarity import *
 # from oldsimi import *
 from pyspark.sql.types import *
 from pyspark.sql.functions import desc
 from pyspark.sql.functions import rank
 from pyspark.sql import Window
+from pyspark.ml.linalg import Vectors, VectorUDT
+from pyspark.ml.classification import MultilayerPerceptronClassifier
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 
 
 def prepare():
@@ -32,6 +36,7 @@ def prepare():
 		.config("spark.executor.instance", "4") \
 		.config("spark.executor.memory", "2g") \
 		.config('spark.sql.codegen.wholeStage', False) \
+		.config("spark.sql.autoBroadcastJoinThreshold", 1048576000) \
 		.getOrCreate()
 
 	access_key = os.getenv("AWS_ACCESS_KEY_ID")
@@ -48,9 +53,7 @@ def prepare():
 
 
 @udf(returnType=IntegerType())
-def check_similarity(packid_check, packid_standard, similarity):
-	# if v < 0.7:
-	# 	return 0
+def check_similarity(packid_check, packid_standard):
 	if (packid_check == "") & (packid_standard == ""):
 		return 1
 	elif len(packid_check) == 0:
@@ -70,10 +73,7 @@ def check_similarity(packid_check, packid_standard, similarity):
 if __name__ == '__main__':
 	spark = prepare()
 	df_standard = load_standard_prod(spark)
-
 	df_cleanning = load_cleanning_prod(spark)
-	print("数据总数：")
-	print(df_cleanning.count())
 	# df_cleanning = df_cleanning.limit(100)
 	df_interfere = load_interfere_mapping(spark)
 
@@ -81,44 +81,47 @@ if __name__ == '__main__':
 	df_cleanning = human_interfere(spark, df_cleanning, df_interfere)
 	df_cleanning.persist()
 
-	# 2. 以MOLE_NAME为主键JOIN
-	df_result = similarity(spark, df_cleanning, df_standard)
+	# 2. cross join
+	df_result = feature_cal(spark, df_cleanning, df_standard)
 	df_result.persist()
-	df_result.show()
-	print(df_result.count())
+	df_result.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/fulljoin")
 
-	# 3. 对每个需要匹配的值做猜想排序
-	windowSpec  = Window.partitionBy("id").orderBy(desc("SIMILARITY"))
-	# windowSpec  = Window.partitionBy("id").orderBy("SIMILARITY")
+	# vec_udf = udf(lambda vs: Vectors.dense(vs), VectorUDT())
+	# similarity_udf = udf(lambda vs: 0.1 * vs[2] + 0.1 * vs[3] + 0.5 * vs[4] + 0.1 * vs[0] + 0.1 * vs[1] + 0.1 * vs[5], DoubleType())
+	# df_result = df_result.withColumn("similarity", similarity_udf(df_result.featureCol))
+	# df_result = df_result.where(df_result.similarity > 0.7)
+	# df_result = df_result.withColumn("features", vec_udf(df_result.featureCol)) \
+	# 				.withColumn("label", check_similarity(df_result.PACK_ID_CHECK, df_result.PACK_ID_STANDARD))
+	# df_result.persist()
 
-	df_match = df_result.withColumn("RANK", rank().over(windowSpec))
-	df_match = df_match.where(df_match.RANK <= 5)
+	# df_training = df_result.select("id", "label", "features").orderBy("id")
+	# # 3. 对每个需要匹配的值做猜想排序
+	# df_training.show()
+	# # print(df_training.count())
+	# # df_training.printSchema()
 
-	df_match.persist()
-	
-	# df_match.printSchema()
+	# # Split the data into train and test
+	# splits = df_training.randomSplit([0.6, 0.4], 1234)
+	# train = splits[0]
+	# test = splits[1]
 
-	df_match = df_match.withColumn("check", check_similarity(df_match.PACK_ID_CHECK, df_match.PACK_ID_STANDARD, df_match.SIMILARITY))
-	# df_match.show(5)
-	df_match = df_match.orderBy("id").drop("ORIGIN", "STANDARD")
-	df_match.persist()
-	# df_match.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/azsanofi/0.0.3/all")
-	df_match.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.15/all")
+	# # specify layers for the neural network:
+	# # input layer of size 6 (features)
+	# # and output of size 2 (boolean)
+	# layers = [6, 3, 2]
 
-	df_replace = df_match.filter(df_match.check == 1)
+	# # create the trainer and set its parameters
+	# trainer = MultilayerPerceptronClassifier(maxIter=100, layers=layers, blockSize=128, seed=1234)
 
-	df_no_replace = df_match.filter(df_match.check == 0)
+	# # train the model
+	# model = trainer.fit(train)
 
-	print("匹配正确：")
-	print(df_replace.count())
-	# df_replace = df_replace.where(df_replace.SIMILARITY > 0.7)
-	print("匹配错误：")
-	print(df_no_replace.count())
-	# df_replace.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/azsanofi/0.0.3/replace")
-	df_replace.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.15/replace")
-	# df_no_replace.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/azsanofi/0.0.3/no_replace")
-	df_no_replace.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.15/no_replace")
+	# # compute accuracy on the test set
+	# result = model.transform(test)
+	# predictionAndLabels = result.select("id", "prediction", "label").orderBy("id")
+	# predictionAndLabels.show()
+	# evaluator = MulticlassClassificationEvaluator(metricName="accuracy")
+	# print("Test set accuracy = " + str(evaluator.evaluate(predictionAndLabels)))
 
-	print(df_no_replace.count())
-	df_replace.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.3/replace")
-
+	# save the model
+	# model.write().save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/model2")
