@@ -35,8 +35,8 @@ def prepare():
 	spark = SparkSession.builder \
 		.master("yarn") \
 		.appName("CPA&GYC match refactor") \
-		.config("spark.driver.memory", "1g") \
-		.config("spark.executor.cores", "2") \
+		.config("spark.driver.memory", "2g") \
+		.config("spark.executor.cores", "4") \
 		.config("spark.executor.instance", "4") \
 		.config("spark.executor.memory", "2g") \
 		.config('spark.sql.codegen.wholeStage', False) \
