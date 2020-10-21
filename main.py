@@ -70,7 +70,10 @@ def check_similarity(packid_check, packid_standard, similarity):
 if __name__ == '__main__':
 	spark = prepare()
 	df_standard = load_standard_prod(spark)
+
 	df_cleanning = load_cleanning_prod(spark)
+	print("数据总数：")
+	print(df_cleanning.count())
 	# df_cleanning = df_cleanning.limit(100)
 	df_interfere = load_interfere_mapping(spark)
 
@@ -91,34 +94,29 @@ if __name__ == '__main__':
 	df_match = df_result.withColumn("RANK", rank().over(windowSpec))
 	df_match = df_match.where(df_match.RANK <= 5)
 
-	# df_match.show()
 	df_match.persist()
-	df_match.show()
-	print(df_match.count())
+	
 	# df_match.printSchema()
 
 	df_match = df_match.withColumn("check", check_similarity(df_match.PACK_ID_CHECK, df_match.PACK_ID_STANDARD, df_match.SIMILARITY))
-	df_match.show(5)
+	# df_match.show(5)
 	df_match = df_match.orderBy("id").drop("ORIGIN", "STANDARD")
 	df_match.persist()
-	df_match.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.3/all")
+	# df_match.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/azsanofi/0.0.3/all")
+	df_match.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.15/all")
 
 	df_replace = df_match.filter(df_match.check == 1)
 
 	df_no_replace = df_match.filter(df_match.check == 0)
-	df_no_replace.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.3/no_replace")
 
+	print("匹配正确：")
 	print(df_replace.count())
 	# df_replace = df_replace.where(df_replace.SIMILARITY > 0.7)
+	print("匹配错误：")
 	print(df_no_replace.count())
-	df_replace.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.3/replace")
-	
-	# df_match = df_match.orderBy("id").drop("ORIGIN", "STANDARD")
-	# df_match.persist()
-	# df_match.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.3/all")
-	# df_no_replace.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.3/no_replace")
+	# df_replace.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/azsanofi/0.0.3/replace")
+	df_replace.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.15/replace")
+	# df_no_replace.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/azsanofi/0.0.3/no_replace")
+	df_no_replace.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.15/no_replace")
 
-	# print(df_replace.count())
-	# df_replace = df_replace.where(df_replace.SIMILARITY > 0.7)
-	# print(df_replace.count())
-	# df_replace.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/replace")
+	
