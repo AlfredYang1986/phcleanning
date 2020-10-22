@@ -335,9 +335,9 @@ def similarity_cal_udf(origin, standard):
 	 		elif (len(lsta) == 2) and (len(lstb) == 2) and (lsta[0] == lstb[1]) and (lsta[1] == lstb[0]):
 	 			return 0
 	 		else:
-	 			return (len(new_check_spec) - edit_distance(new_in_spec, new_check_spec))/len(new_check_spec)
+	 			return edit_distance(new_in_spec, new_check_spec)
 	 	else:
-	 	    return (len(new_check_spec) - edit_distance(new_in_spec, new_check_spec))/len(new_check_spec)
+	 	    return edit_distance(new_in_spec, new_check_spec)
 	#  		return (new_check_spec - edit_distance(new_in_spec, new_check_spec))/new_check_spec
 
 
@@ -357,7 +357,7 @@ def similarity_cal_udf(origin, standard):
 
 		return dp[m][n]
 
-
+	
 	mn = 0 if len(standard[0]) == 0 else (len(standard[0]) - mole_name(origin[0], standard[0]))/len(standard[0])
 	pd = 0 if len(standard[1]) == 0 else (len(standard[1]) - product(origin[1], standard[1]))/len(standard[1])
 	dg = 0 if len(standard[2]) == 0 else (len(standard[2]) - dosage(origin[2], standard[2]))/len(standard[2])
