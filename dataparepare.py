@@ -21,7 +21,7 @@ from pyspark.sql.types import *
 读取标准表
 """
 def load_standard_prod(spark):
-     df_standard = spark.read.parquet("s3a://ph-stream/common/public/prod/0.0.17") \
+     df_standard = spark.read.parquet("s3a://ph-stream/common/public/prod/0.0.18") \
                     .select("PACK_ID",
                               "MOLE_NAME_CH", "MOLE_NAME_EN",
                               "PROD_DESC", "PROD_NAME_CH",
@@ -94,7 +94,7 @@ def load_stream_cleanning_prod(spark):
 读取人工干预表
 """
 def load_interfere_mapping(spark):
-     # df_interfere = spark.read.parquet("s3a://ph-stream/common/public/human_replace/0.0.14") \
+     # df_interfere = spark.read.parquet("s3a://ph-stream/common/public/human_replace/0.0.15") \
      #                     .withColumnRenamed("MOLE_NAME", "MOLE_NAME_INTERFERE") \
      #                     .withColumnRenamed("PRODUCT_NAME", "PRODUCT_NAME_INTERFERE") \
      #                     .withColumnRenamed("SPEC", "SPEC_INTERFERE") \

@@ -37,7 +37,7 @@ def prepare():
 		.config("spark.executor.memory", "2g") \
 		.config('spark.sql.codegen.wholeStage', False) \
 		.config("spark.sql.autoBroadcastJoinThreshold", 1048576000) \
-		.config("spark.sql.files.maxRecordsPerFile", 33554432) \
+    .config("spark.sql.files.maxRecordsPerFile", 33554432) \
 		.getOrCreate()
 
 	access_key = os.getenv("AWS_ACCESS_KEY_ID")
@@ -73,6 +73,21 @@ def check_similarity(packid_check, packid_standard):
 
 if __name__ == '__main__':
 	spark = prepare()
+  
+	df_standard = load_standard_prod(spark)
+	df_cleanning = load_cleanning_prod(spark)
+	# df_cleanning = df_cleanning.limit(100)
+	df_interfere = load_interfere_mapping(spark)
+
+	# 1. human interfere
+	df_cleanning = human_interfere(spark, df_cleanning, df_interfere)
+	df_cleanning.persist()
+
+	# 2. cross join
+	df_result = feature_cal(spark, df_cleanning, df_standard)
+	df_result.persist()
+	df_result.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/fulljoin")
+
 	df_result = load_training_data(spark)
 	df_result = feature_cal(df_result)
 
