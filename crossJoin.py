@@ -36,12 +36,12 @@ def prepare():
 		.master("yarn") \
 		.appName("CPA&GYC match refactor") \
 		.config("spark.driver.memory", "2g") \
-		.config("spark.executor.cores", "2") \
-		.config("spark.executor.instance", "4") \
-		.config("spark.executor.memory", "4g") \
+		.config("spark.executor.cores", "4") \
+		.config("spark.executor.instances", "4") \
+		.config("spark.executor.memory", "2g") \
 		.config('spark.sql.codegen.wholeStage', False) \
 		.config("spark.sql.autoBroadcastJoinThreshold", 1048576000) \
-		.config("spark.sql.files.maxRecordsPerFile", 33554432) \
+		.config("spark.sql.files.maxRecordsPerFile", 554432) \
 		.config("spark.sql.execution.arrow.enabled", "true") \
 		.getOrCreate()
 
@@ -61,21 +61,15 @@ def prepare():
 if __name__ == '__main__':
 	spark = prepare()
 	df_standard = load_standard_prod(spark)
-	df_cleanning = load_stream_cleanning_prod(spark)
-	df_cleanning = df_cleanning.limit(1)
-	# df_cleanning = load_cleanning_prod(spark)
-	# df_cleanning.printSchema()
-	# df_cleanning = df_cleanning.limit(100)
 	df_interfere = load_interfere_mapping(spark)
+
+	modify_pool_cleanning_prod(spark)
+	df_cleanning = load_stream_cleanning_prod(spark)
 
 	# 1. human interfere
 	df_cleanning = human_interfere(spark, df_cleanning, df_interfere)
-	# df_cleanning.persist()
 
 	# 2. cross join
-	# df_result = df_cleanning.crossJoin(broadcast(df_standard)).na.fill("") \
-	#  				.withColumn("ORIGIN", array(["MOLE_NAME", "PRODUCT_NAME", "DOSAGE", "SPEC", "PACK_QTY", "MANUFACTURER_NAME"])) \
-	#  				.withColumn("STANDARD", array(["MOLE_NAME_STANDARD", "PRODUCT_NAME_STANDARD", "DOSAGE_STANDARD", "SPEC_STANDARD", "PACK_QTY_STANDARD", "MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_EN_STANDARD"]))
 	df_result = df_cleanning.crossJoin(broadcast(df_standard)).na.fill("")
 	df_result = dosage_standify(df_result)
 
@@ -105,8 +99,8 @@ if __name__ == '__main__':
 	# 3. save the steam
 	query = df_result.writeStream \
 				.format("parquet") \
-				.option("checkpointLocation", "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/crossJoin3/checkpoint") \
-				.option("path", "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/crossJoin3/data") \
+				.option("checkpointLocation", "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/crossJoin/checkpoint") \
+				.option("path", "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/crossJoin/data") \
 				.start()
 
 	query.awaitTermination()

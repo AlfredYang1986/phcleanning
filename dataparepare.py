@@ -60,33 +60,43 @@ def load_cleanning_prod(spark):
      df_cleanning = df_cleanning.repartition(1).withColumn("id", monotonically_increasing_id())
      #df_cleanning = df_cleanning.readStream.withColumn("id", monotonically_increasing_id())
 
-     # df_cleanning.show()
-     # df_cleanning.printSchema()
-     # print df_cleanning.count()
-
+     # 为了算法更高的并发，在这里将文件拆分为16个，然后以16的并发数开始跑人工智能
+     # df_cleanning.repartition(16).write.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/splitdata")
      return df_cleanning
+
+
+"""
+更高的并发数
+"""
+def modify_pool_cleanning_prod(spark):
+     df_cleanning = spark.read.parquet("s3a://ph-stream/common/public/pfizer_check").drop("version")
+
+     # 为了验证算法，保证id尽可能可读性，投入使用后需要删除
+     df_cleanning = df_cleanning.repartition(1).withColumn("id", monotonically_increasing_id())
+     #df_cleanning = df_cleanning.readStream.withColumn("id", monotonically_increasing_id())
+
+     # 为了算法更高的并发，在这里将文件拆分为16个，然后以16的并发数开始跑人工智能
+     df_cleanning.repartition(16).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/splitdata")
+     # return df_cleanning
 
 
 """
 流读取待清洗的数据
 """
 def load_stream_cleanning_prod(spark):
-
 	schema = \
 		StructType([ \
+			StructField("id", LongType()), \
 			StructField("PACK_ID_CHECK", StringType()), \
 			StructField("MOLE_NAME", StringType()), \
 			StructField("PRODUCT_NAME", StringType()), \
 			StructField("DOSAGE", StringType()), \
 			StructField("SPEC", StringType()), \
 			StructField("PACK_QTY", StringType()), \
-			StructField("MANUFACTURER_NAME", StringType()), \
-			StructField("version", StringType())
+			StructField("MANUFACTURER_NAME", StringType())
 		])
 
-	df_cleanning = spark.readStream.schema(schema).parquet("s3a://ph-stream/common/public/pfizer_check").drop("version")
-	# 为了验证算法，保证id尽可能可读性，投入使用后需要删除
-	df_cleanning = df_cleanning.withColumn("id", lit(1))
+	df_cleanning = spark.readStream.schema(schema).parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/splitdata")
 	return df_cleanning
 
 
