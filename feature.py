@@ -21,6 +21,7 @@ import jieba
 import jieba.posseg as pseg
 import jieba.analyse as analyse
 from pyspark.sql.functions import broadcast
+from pyspark.sql.functions import pandas_udf, PandasUDFType
 
 
 @udf(returnType=ArrayType(DoubleType()))
@@ -372,10 +373,16 @@ def dense_vector_udf(origin, standard):
 	return [mn, pd, dg, sp, pq, max(mfc, mfe)]
 
 
+
 def feature_cal(spark, df_cleanning, df_standard):
-	 df_result = df_cleanning.crossJoin(broadcast(df_standard)).orderBy("PACK_ID_CHECK").na.fill("") \
+    df_result = df_cleanning.crossJoin(broadcast(df_standard)).orderBy("PACK_ID_CHECK").na.fill("") \
 	 				.withColumn("ORIGIN", array(["MOLE_NAME", "PRODUCT_NAME", "DOSAGE", "SPEC", "PACK_QTY", "MANUFACTURER_NAME"])) \
 	 				.withColumn("STANDARD", array(["MOLE_NAME_STANDARD", "PRODUCT_NAME_STANDARD", "DOSAGE_STANDARD", "SPEC_STANDARD", "PACK_QTY_STANDARD", "MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_EN_STANDARD"]))
 
-	 #df_result = df_result.withColumn("featureCol", dense_vector_udf(df_result.ORIGIN, df_result.STANDARD))
+    #df_result = df_result.withColumn("featureCol", dense_vector_udf(df_result.ORIGIN, df_result.STANDARD))
+    return df_result
+
+  
+def feature_cal2(df_result):
+	 df_result = df_result.withColumn("featureCol", dense_vector_udf(df_result.ORIGIN, df_result.STANDARD))
 	 return df_result

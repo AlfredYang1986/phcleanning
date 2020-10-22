@@ -37,6 +37,7 @@ def prepare():
 		.config("spark.executor.memory", "2g") \
 		.config('spark.sql.codegen.wholeStage', False) \
 		.config("spark.sql.autoBroadcastJoinThreshold", 1048576000) \
+    .config("spark.sql.files.maxRecordsPerFile", 33554432) \
 		.getOrCreate()
 
 	access_key = os.getenv("AWS_ACCESS_KEY_ID")
@@ -72,6 +73,7 @@ def check_similarity(packid_check, packid_standard):
 
 if __name__ == '__main__':
 	spark = prepare()
+  
 	df_standard = load_standard_prod(spark)
 	df_cleanning = load_cleanning_prod(spark)
 	# df_cleanning = df_cleanning.limit(100)
@@ -86,42 +88,40 @@ if __name__ == '__main__':
 	df_result.persist()
 	df_result.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/fulljoin")
 
-	# vec_udf = udf(lambda vs: Vectors.dense(vs), VectorUDT())
-	# similarity_udf = udf(lambda vs: 0.1 * vs[2] + 0.1 * vs[3] + 0.5 * vs[4] + 0.1 * vs[0] + 0.1 * vs[1] + 0.1 * vs[5], DoubleType())
-	# df_result = df_result.withColumn("similarity", similarity_udf(df_result.featureCol))
+	df_result = load_training_data(spark)
+	df_result = feature_cal(df_result)
+
+	vec_udf = udf(lambda vs: Vectors.dense(vs), VectorUDT())
+	similarity_udf = udf(lambda vs: 0.1 * vs[2] + 0.1 * vs[3] + 0.5 * vs[4] + 0.1 * vs[0] + 0.1 * vs[1] + 0.1 * vs[5], DoubleType())
+	df_result = df_result.withColumn("similarity", similarity_udf(df_result.featureCol))
 	# df_result = df_result.where(df_result.similarity > 0.7)
-	# df_result = df_result.withColumn("features", vec_udf(df_result.featureCol)) \
-	# 				.withColumn("label", check_similarity(df_result.PACK_ID_CHECK, df_result.PACK_ID_STANDARD))
-	# df_result.persist()
+	df_result = df_result.withColumn("features", vec_udf(df_result.featureCol)) \
+					.withColumn("label", check_similarity(df_result.PACK_ID_CHECK, df_result.PACK_ID_STANDARD))
+	df_result.persist()
 
-	# df_training = df_result.select("id", "label", "features").orderBy("id")
-	# # 3. 对每个需要匹配的值做猜想排序
-	# df_training.show()
-	# # print(df_training.count())
-	# # df_training.printSchema()
+	df_training = df_result.select("id", "label", "features").orderBy("id")
+	# Split the data into train and test
+	splits = df_training.randomSplit([0.6, 0.4], 1234)
+	train = splits[0]
+	test = splits[1]
 
-	# # Split the data into train and test
-	# splits = df_training.randomSplit([0.6, 0.4], 1234)
-	# train = splits[0]
-	# test = splits[1]
+	# specify layers for the neural network:
+	# input layer of size 6 (features)
+	# and output of size 2 (boolean)
+	layers = [6, 3, 2]
 
-	# # specify layers for the neural network:
-	# # input layer of size 6 (features)
-	# # and output of size 2 (boolean)
-	# layers = [6, 3, 2]
+	# create the trainer and set its parameters
+	trainer = MultilayerPerceptronClassifier(maxIter=100, layers=layers, blockSize=128, seed=1234)
 
-	# # create the trainer and set its parameters
-	# trainer = MultilayerPerceptronClassifier(maxIter=100, layers=layers, blockSize=128, seed=1234)
+	# train the model
+	model = trainer.fit(train)
 
-	# # train the model
-	# model = trainer.fit(train)
-
-	# # compute accuracy on the test set
-	# result = model.transform(test)
-	# predictionAndLabels = result.select("id", "prediction", "label").orderBy("id")
-	# predictionAndLabels.show()
-	# evaluator = MulticlassClassificationEvaluator(metricName="accuracy")
-	# print("Test set accuracy = " + str(evaluator.evaluate(predictionAndLabels)))
+	# compute accuracy on the test set
+	result = model.transform(test)
+	predictionAndLabels = result.select("id", "prediction", "label").orderBy("id")
+	predictionAndLabels.show()
+	evaluator = MulticlassClassificationEvaluator(metricName="accuracy")
+	print("Test set accuracy = " + str(evaluator.evaluate(predictionAndLabels)))
 
 	# save the model
-	# model.write().save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/model2")
+	model.write().save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/model2")
