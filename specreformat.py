@@ -95,8 +95,8 @@ def percent_pandas_udf(percent, valid, gross):
 
   return pd.Series(result)
 
-def spec_standify(df):
 
+def spec_standify(df):
   df = df.withColumn("SPEC", regexp_replace("SPEC", r"(万)", "T"))
   df = df.withColumn("SPEC", regexp_replace("SPEC", r"(μ)", "U"))
   df = df.withColumn("SPEC", upper(df.SPEC))

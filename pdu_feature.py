@@ -79,3 +79,16 @@ def edit_distance_with_float_change_pandas_udf(a, b):
 @udf(DoubleType())
 def similarity_2_udf(mn, pd, dg, sp, pq, mf):
 	return dg + 10*sp+ 60*pq + mf + pd + mn
+
+
+@pandas_udf(ArrayType(DoubleType()), PandasUDFType.SCALAR)
+def efftiveness_with_edit_distance(mo, ms, po, ps):
+	frame = {
+		"MOLE_NAME": mo, "MOLE_NAME_STANDARD": ms,
+		"PRODUCT_NAME": po, "PRODUCT_NAME_STANDARD": ps
+	}
+	df = pd.DataFrame(frame)
+	df["MOLE_EFFECTIVE_RESULT"] = df.apply(lambda x: ed(x["MOLE_NAME"], x["MOLE_NAME_STANDARD"]), axis=1)
+	df["PRODUCT_EFFECTIVE_RESULT"] = df.apply(lambda x: 0 if x["PRODUCT_NAME"] in x ["PRODUCT_NAME_STANDARD"] else 0 if x["PRODUCT_NAME_STANDARD"] in x ["PRODUCT_NAME"] else ed(x["PRODUCT_NAME"], x["PRODUCT_NAME_STANDARD"]), axis=1)
+	df["RESULT"] = df.apply(lambda x: [x["MOLE_EFFECTIVE_RESULT"], x["PRODUCT_EFFECTIVE_RESULT"]], axis=1)
+	return df["RESULT"]
