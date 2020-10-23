@@ -82,13 +82,42 @@ def similarity_2_udf(mn, pd, dg, sp, pq, mf):
 
 
 @pandas_udf(ArrayType(DoubleType()), PandasUDFType.SCALAR)
-def efftiveness_with_edit_distance(mo, ms, po, ps):
+def efftiveness_with_edit_distance(mo, ms, po, ps, do, ds, so, ss, qo, qs, mf, mfc, mfe):
 	frame = {
 		"MOLE_NAME": mo, "MOLE_NAME_STANDARD": ms,
-		"PRODUCT_NAME": po, "PRODUCT_NAME_STANDARD": ps
+		"PRODUCT_NAME": po, "PRODUCT_NAME_STANDARD": ps,
+		"DOSAGE": do, "DOSAGE_STANDARD": ds,
+		"SPEC": so, "SPEC_STANDARD": ss,
+		"PACK_QTY": qo, "PACK_QTY_STANDARD": qs,
+		"MANUFACTURER_NAME": mf, "MANUFACTURER_NAME_STANDARD": mfc, "MANUFACTURER_NAME_EN_STANDARD": mfe
 	}
 	df = pd.DataFrame(frame)
-	df["MOLE_EFFECTIVE_RESULT"] = df.apply(lambda x: ed(x["MOLE_NAME"], x["MOLE_NAME_STANDARD"]), axis=1)
-	df["PRODUCT_EFFECTIVE_RESULT"] = df.apply(lambda x: 0 if x["PRODUCT_NAME"] in x ["PRODUCT_NAME_STANDARD"] else 0 if x["PRODUCT_NAME_STANDARD"] in x ["PRODUCT_NAME"] else ed(x["PRODUCT_NAME"], x["PRODUCT_NAME_STANDARD"]), axis=1)
-	df["RESULT"] = df.apply(lambda x: [x["MOLE_EFFECTIVE_RESULT"], x["PRODUCT_EFFECTIVE_RESULT"]], axis=1)
+	df["MOLE_ED"] = df.apply(lambda x: ed(x["MOLE_NAME"], x["MOLE_NAME_STANDARD"]), axis=1)
+	df["PRODUCT_ED"] = df.apply(lambda x: 0 if x["PRODUCT_NAME"] in x ["PRODUCT_NAME_STANDARD"] \
+										else 0 if x["PRODUCT_NAME_STANDARD"] in x ["PRODUCT_NAME"] \
+										else ed(x["PRODUCT_NAME"], x["PRODUCT_NAME_STANDARD"]), axis=1)
+	df["DOSAGE_ED"] = df.apply(lambda x: 0 if x["DOSAGE"] in x ["DOSAGE_STANDARD"] \
+										else 0 if x["DOSAGE_STANDARD"] in x ["DOSAGE"] \
+										else ed(x["DOSAGE"], x["DOSAGE_STANDARD"]), axis=1)
+	df["SPEC_ED"] = df.apply(lambda x: 0 if x["SPEC"] in x ["SPEC_STANDARD"] \
+										else 0 if x["SPEC_STANDARD"] in x ["SPEC"] \
+										else ed(x["SPEC"], x["SPEC_STANDARD"]), axis=1)
+	df["PACK_QTY_ED"] = df.apply(lambda x: ed(x["PACK_QTY"], x["PACK_QTY_STANDARD"].replace(".0", "")), axis=1)
+	df["MANUFACTURER_NAME_CH_ED"] = df.apply(lambda x: 0 if x["MANUFACTURER_NAME"] in x ["MANUFACTURER_NAME_STANDARD"] \
+										else 0 if x["MANUFACTURER_NAME_STANDARD"] in x ["MANUFACTURER_NAME"] \
+										else ed(x["MANUFACTURER_NAME"], x["MANUFACTURER_NAME_STANDARD"]), axis=1)
+	df["MANUFACTURER_NAME_EN_ED"] = df.apply(lambda x: 0 if x["MANUFACTURER_NAME"] in x ["MANUFACTURER_NAME_EN_STANDARD"] \
+										else 0 if x["MANUFACTURER_NAME_EN_STANDARD"] in x ["MANUFACTURER_NAME"] \
+										else ed(x["MANUFACTURER_NAME"], x["MANUFACTURER_NAME_EN_STANDARD"]), axis=1)
+	# df["MANUFACTURER_NAME_EFFECTIVENESS"] = df.apply(lambda x: df["MANUFACTURER_NAME_CH_ED"] if df["MANUFACTURER_NAME_CH_ED"] - df["MANUFACTURER_NAME_EN_ED"] < 0 \
+	# 											else df["MANUFACTURER_NAME_EN_ED"], axis=1)
+	# df["MANUFACTURER_NAME_EFFECTIVENESS"] = df.apply(lambda x: df["MANUFACTURER_NAME_CH_ED"], axis=1)
+
+	df["RESULT"] = df.apply(lambda x: [x["MOLE_ED"], \
+										x["PRODUCT_ED"], \
+										x["DOSAGE_ED"], \
+										x["SPEC_ED"], \
+										x["PACK_QTY_ED"], \
+										# x["MANUFACTURER_NAME_EFFECTIVENESS"], \
+										], axis=1)
 	return df["RESULT"]

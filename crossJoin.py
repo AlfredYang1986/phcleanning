@@ -82,17 +82,15 @@ if __name__ == '__main__':
 	df_result = df_cleanning.crossJoin(broadcast(df_standard)).na.fill("")
 
 	# edit_distance
-	df_result = df_result.withColumn("EFFTIVENESS", efftiveness_with_edit_distance(df_result.MOLE_NAME, df_result.MOLE_NAME_STANDARD, df_result.PRODUCT_NAME, df_result.PRODUCT_NAME_STANDARD))
-	# df_result = df_result.withColumn("MOLE_NAME_ED", edit_distance_pandas_udf(df_result.MOLE_NAME, df_result.MOLE_NAME_STANDARD))
-	# df_result = df_result.withColumn("PRODUCT_NAME_ED", edit_distance_with_contains_pandas_udf(df_result.PRODUCT_NAME, df_result.PRODUCT_NAME_STANDARD))
-	# df_result = df_result.withColumn("DOSAGE_ED", edit_distance_with_contains_pandas_udf(df_result.DOSAGE, df_result.DOSAGE_STANDARD))
-	# df_result = df_result.withColumn("SPEC_ED", edit_distance_with_contains_pandas_udf(df_result.SPEC, df_result.SPEC_STANDARD))
-	# df_result = df_result.withColumn("PACK_QTY_ED", edit_distance_with_float_change_pandas_udf(df_result.PACK_QTY, df_result.PACK_QTY_STANDARD))
-	# df_result = df_result.withColumn("MANUFACTURER_NAME_CH_ED", edit_distance_with_contains_pandas_udf(df_result.MANUFACTURER_NAME, df_result.MANUFACTURER_NAME_STANDARD))
-	# df_result = df_result.withColumn("MANUFACTURER_NAME_EN_ED", edit_distance_with_contains_pandas_udf(df_result.MANUFACTURER_NAME, df_result.MANUFACTURER_NAME_EN_STANDARD))
-	# df_result = df_result.withColumn("MANUFACTURER_NAME_ED", \
-					# when(df_result.MANUFACTURER_NAME_CH_ED < df_result.MANUFACTURER_NAME_EN_ED, df_result.MANUFACTURER_NAME_CH_ED) \
-					# .otherwise(df_result.MANUFACTURER_NAME_EN_ED))
+	df_result = df_result.withColumn("EFFTIVENESS", \
+					efftiveness_with_edit_distance( \
+						df_result.MOLE_NAME, df_result.MOLE_NAME_STANDARD, \
+						df_result.PRODUCT_NAME, df_result.PRODUCT_NAME_STANDARD, \
+						df_result.DOSAGE, df_result.DOSAGE_STANDARD, \
+						df_result.SPEC, df_result.SPEC_STANDARD, \
+						df_result.PACK_QTY, df_result.PACK_QTY_STANDARD, \
+						df_result.MANUFACTURER_NAME, df_result.MANUFACTURER_NAME_STANDARD, df_result.MANUFACTURER_NAME_EN_STANDARD \
+						))
 
 	# # features
 	# assembler = VectorAssembler( \
