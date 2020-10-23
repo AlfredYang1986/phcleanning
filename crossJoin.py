@@ -15,6 +15,7 @@ from dataparepare import *
 from interfere import *
 from feature import *
 from pdu_feature import *
+from specreformat import *
 # from similarity import *
 # from oldsimi import *
 from pyspark.sql.types import *
@@ -27,6 +28,8 @@ from pyspark.ml.linalg import Vectors, VectorUDT
 from pyspark.ml.classification import MultilayerPerceptronClassifier
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.ml.feature import VectorAssembler
+import re
+import pandas as pd
 
 
 def prepare():
@@ -36,12 +39,12 @@ def prepare():
 		.master("yarn") \
 		.appName("CPA&GYC match refactor") \
 		.config("spark.driver.memory", "2g") \
-		.config("spark.executor.cores", "2") \
-		.config("spark.executor.instance", "4") \
-		.config("spark.executor.memory", "4g") \
+		.config("spark.executor.cores", "4") \
+		.config("spark.executor.instances", "4") \
+		.config("spark.executor.memory", "2g") \
 		.config('spark.sql.codegen.wholeStage', False) \
 		.config("spark.sql.autoBroadcastJoinThreshold", 1048576000) \
-		.config("spark.sql.files.maxRecordsPerFile", 33554432) \
+		.config("spark.sql.files.maxRecordsPerFile", 554432) \
 		.config("spark.sql.execution.arrow.enabled", "true") \
 		.getOrCreate()
 
@@ -61,52 +64,51 @@ def prepare():
 if __name__ == '__main__':
 	spark = prepare()
 	df_standard = load_standard_prod(spark)
-	df_cleanning = load_stream_cleanning_prod(spark)
-	df_cleanning = df_cleanning.limit(1)
-	# df_cleanning = load_cleanning_prod(spark)
-	# df_cleanning.printSchema()
-	# df_cleanning = df_cleanning.limit(100)
-	df_interfere = load_interfere_mapping(spark)
+	# df_interfere = load_interfere_mapping(spark)
+
+	# modify_pool_cleanning_prod(spark)
+	# df_cleanning = load_stream_cleanning_prod(spark)
+	# df_cleanning = dosage_standify(df_cleanning)
+	# df_cleanning = df_cleanning.withColumn("SPEC", transfer_unit_pandas_udf(df_cleanning.SPEC))
+	df_standard.show(10)
+	df_standard = df_standard.withColumn("SPEC_STANDARD", transfer_unit_pandas_udf(df_standard.SPEC_STANDARD))
+	df_standard.show()
 
 	# 1. human interfere
-	df_cleanning = human_interfere(spark, df_cleanning, df_interfere)
-	# df_cleanning.persist()
+	# df_cleanning = human_interfere(spark, df_cleanning, df_interfere)
 
 	# 2. cross join
-	# df_result = df_cleanning.crossJoin(broadcast(df_standard)).na.fill("") \
-	#  				.withColumn("ORIGIN", array(["MOLE_NAME", "PRODUCT_NAME", "DOSAGE", "SPEC", "PACK_QTY", "MANUFACTURER_NAME"])) \
-	#  				.withColumn("STANDARD", array(["MOLE_NAME_STANDARD", "PRODUCT_NAME_STANDARD", "DOSAGE_STANDARD", "SPEC_STANDARD", "PACK_QTY_STANDARD", "MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_EN_STANDARD"]))
-	df_result = df_cleanning.crossJoin(broadcast(df_standard)).na.fill("")
-	df_result = dosage_standify(df_result)
+	# df_result = df_cleanning.crossJoin(broadcast(df_standard)).na.fill("")
+	# df_result = dosage_standify(df_result)
 
 	# edit_distance
-	df_result = df_result.withColumn("MOLE_NAME_ED", edit_distance_pandas_udf(df_result.MOLE_NAME, df_result.MOLE_NAME_STANDARD))
-	df_result = df_result.withColumn("PRODUCT_NAME_ED", edit_distance_with_contains_pandas_udf(df_result.PRODUCT_NAME, df_result.PRODUCT_NAME_STANDARD))
-	df_result = df_result.withColumn("DOSAGE_ED", edit_distance_with_contains_pandas_udf(df_result.DOSAGE, df_result.DOSAGE_STANDARD))
-	df_result = df_result.withColumn("SPEC_ED", edit_distance_with_contains_pandas_udf(df_result.SPEC, df_result.SPEC_STANDARD))
-	df_result = df_result.withColumn("PACK_QTY_ED", edit_distance_with_float_change_pandas_udf(df_result.PACK_QTY, df_result.PACK_QTY_STANDARD))
-	df_result = df_result.withColumn("MANUFACTURER_NAME_CH_ED", edit_distance_with_contains_pandas_udf(df_result.MANUFACTURER_NAME, df_result.MANUFACTURER_NAME_STANDARD))
-	df_result = df_result.withColumn("MANUFACTURER_NAME_EN_ED", edit_distance_with_contains_pandas_udf(df_result.MANUFACTURER_NAME, df_result.MANUFACTURER_NAME_EN_STANDARD))
-	df_result = df_result.withColumn("MANUFACTURER_NAME_ED", \
-					when(df_result.MANUFACTURER_NAME_CH_ED < df_result.MANUFACTURER_NAME_EN_ED, df_result.MANUFACTURER_NAME_CH_ED) \
-					.otherwise(df_result.MANUFACTURER_NAME_EN_ED))
+	# df_result = df_result.withColumn("MOLE_NAME_ED", edit_distance_pandas_udf(df_result.MOLE_NAME, df_result.MOLE_NAME_STANDARD))
+	# df_result = df_result.withColumn("PRODUCT_NAME_ED", edit_distance_with_contains_pandas_udf(df_result.PRODUCT_NAME, df_result.PRODUCT_NAME_STANDARD))
+	# df_result = df_result.withColumn("DOSAGE_ED", edit_distance_with_contains_pandas_udf(df_result.DOSAGE, df_result.DOSAGE_STANDARD))
+	# df_result = df_result.withColumn("SPEC_ED", edit_distance_with_contains_pandas_udf(df_result.SPEC, df_result.SPEC_STANDARD))
+	# df_result = df_result.withColumn("PACK_QTY_ED", edit_distance_with_float_change_pandas_udf(df_result.PACK_QTY, df_result.PACK_QTY_STANDARD))
+	# df_result = df_result.withColumn("MANUFACTURER_NAME_CH_ED", edit_distance_with_contains_pandas_udf(df_result.MANUFACTURER_NAME, df_result.MANUFACTURER_NAME_STANDARD))
+	# df_result = df_result.withColumn("MANUFACTURER_NAME_EN_ED", edit_distance_with_contains_pandas_udf(df_result.MANUFACTURER_NAME, df_result.MANUFACTURER_NAME_EN_STANDARD))
+	# df_result = df_result.withColumn("MANUFACTURER_NAME_ED", \
+	# 				when(df_result.MANUFACTURER_NAME_CH_ED < df_result.MANUFACTURER_NAME_EN_ED, df_result.MANUFACTURER_NAME_CH_ED) \
+	# 				.otherwise(df_result.MANUFACTURER_NAME_EN_ED))
 
-	# features
-	assembler = VectorAssembler( \
-					inputCols=["MOLE_NAME_ED", "PRODUCT_NAME_ED", "DOSAGE_ED", "SPEC_ED", "PACK_QTY_ED", "MANUFACTURER_NAME_ED"], \
-					outputCol="features")
-	df_result = assembler.transform(df_result)
+	# # features
+	# assembler = VectorAssembler( \
+	# 				inputCols=["MOLE_NAME_ED", "PRODUCT_NAME_ED", "DOSAGE_ED", "SPEC_ED", "PACK_QTY_ED", "MANUFACTURER_NAME_ED"], \
+	# 				outputCol="features")
+	# df_result = assembler.transform(df_result)
 
-	df_result = df_result.withColumn("PACK_ID_CHECK_NUM", df_result.PACK_ID_CHECK.cast("int")).na.fill({"PACK_ID_CHECK_NUM": -1})
-	df_result = df_result.withColumn("PACK_ID_STANDARD_NUM", df_result.PACK_ID_STANDARD.cast("int")).na.fill({"PACK_ID_STANDARD_NUM": -1})
-	df_result = df_result.withColumn("label",
-					when((df_result.PACK_ID_CHECK_NUM > 0) & (df_result.PACK_ID_STANDARD_NUM > 0) & (df_result.PACK_ID_CHECK_NUM == df_result.PACK_ID_STANDARD_NUM), 1.0).otherwise(0.0))
+	# df_result = df_result.withColumn("PACK_ID_CHECK_NUM", df_result.PACK_ID_CHECK.cast("int")).na.fill({"PACK_ID_CHECK_NUM": -1})
+	# df_result = df_result.withColumn("PACK_ID_STANDARD_NUM", df_result.PACK_ID_STANDARD.cast("int")).na.fill({"PACK_ID_STANDARD_NUM": -1})
+	# df_result = df_result.withColumn("label",
+	# 				when((df_result.PACK_ID_CHECK_NUM > 0) & (df_result.PACK_ID_STANDARD_NUM > 0) & (df_result.PACK_ID_CHECK_NUM == df_result.PACK_ID_STANDARD_NUM), 1.0).otherwise(0.0))
 
 	# 3. save the steam
-	query = df_result.writeStream \
-				.format("parquet") \
-				.option("checkpointLocation", "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/crossJoin3/checkpoint") \
-				.option("path", "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/crossJoin3/data") \
-				.start()
+	# query = df_result.writeStream \
+	# 			.format("parquet") \
+	# 			.option("checkpointLocation", "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/crossJoin2/checkpoint") \
+	# 			.option("path", "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/crossJoin2/data") \
+	# 			.start()
 
-	query.awaitTermination()
+	# query.awaitTermination()
