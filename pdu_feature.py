@@ -54,12 +54,10 @@ def dosage_standify(df):
 
 @pandas_udf(DoubleType(), PandasUDFType.SCALAR)
 def edit_distance_pandas_udf(a, b):
-	row_num = a.shape[0]
-	result = []
-	for index in range(row_num):
-		result.append(ed(a[index], b[index]))
-
-	return pd.Series(result)
+	frame = { "left": a, "right": b }
+	df = pd.DataFrame(frame)
+	df["RESULT"] = df.apply(lambda x: ed(x["left"], x["right"]), axis=1)
+	return df["RESULT"]
 
 
 @pandas_udf(DoubleType(), PandasUDFType.SCALAR)
