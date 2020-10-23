@@ -1,14 +1,15 @@
 import os
+from pyspark import SparkContext, SparkConf
 from pyspark.sql import SparkSession
-from dataparepare import *
-from interfere import *
-from similarity import *
-# from oldsimi import *
 from pyspark.sql.types import *
-from pyspark.sql import functions as func
+import re
+# import numpy as np
+from pyspark.sql.functions import *
 from pyspark.sql import Window
 from pyspark.sql.functions import pandas_udf, PandasUDFType
 from pyspark.sql.types import *
+import pandas as pd
+from pyspark.sql.functions import col, pandas_udf
 
 
 def execute():
@@ -142,7 +143,7 @@ def execute():
 
 		return df
 
-	df = spec_standify(df)
-	df.show()
+	df_cleanning = spec_standify(df_cleanning)
+	df_cleanning.show()
 	
 execute()
