@@ -44,8 +44,7 @@ def execute():
 		
 	df_cleanning = spark.read.parquet("s3a://ph-stream/common/public/pfizer_check").drop("version").na.fill("")
 	df_cleanning.show()
-	
-		
+
 	
 	def unit_transform(spec_str):
 			# 输入一个数字+单位的str，输出同一单位后的str
@@ -101,8 +100,7 @@ def execute():
 				value = ""
 
 			return str(value) + unit
-	
-	
+
 	
 	@pandas_udf(StringType(), PandasUDFType.SCALAR)
 	def transfer_unit_pandas_udf(value):
@@ -113,6 +111,26 @@ def execute():
 	
 		return pd.Series(result)
 	
+	@pandas_udf(StringType(), PandasUDFType.SCALAR)
+	def percent_pandas_udf(percent, valid, gross):
+		row_num = percent.shape[0]
+		result = []
+		digit_regex = '\d+\.?\d*e?-?\d*?'
+		for index in range(row_num):
+			if percent[index] != "" and valid[index] != "" and gross[index] == "":
+				num = int(percent[index].strip("%"))
+				value = re.findall(digit_regex, valid[index])[0]
+				unit = valid[index].strip(value)  # type = str
+				final_num = num*float(value)*0.01
+				result.append(str(final_num) + unit)
+			
+			elif percent[index] != "" and valid[index] != "" and gross[index] != "":
+				result.append("")
+			
+			else:
+				result.append(percent[index])
+	
+		return pd.Series(result)
 	
 	def spec_standify(df):
 		
@@ -125,7 +143,7 @@ def execute():
 		df = df.withColumn("SPEC_co", regexp_extract('SPEC', r'(CO)', 1))
 		spec_valid_regex =  r'([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)'
 		df = df.withColumn("SPEC_valid", regexp_extract('SPEC', spec_valid_regex, 1))
-		spec_gross_regex =  r'([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)[ /:+\s]([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)'
+		spec_gross_regex =  r'([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)[ /:∶+\s]([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)'
 		df = df.withColumn("SPEC_gross", regexp_extract('SPEC', spec_gross_regex, 2))
 		
 		digit_regex_spec = r'(\d+\.?\d*e?-?\d*?)'
@@ -137,9 +155,10 @@ def execute():
 		df = df.withColumn("SPEC_valid", transfer_unit_pandas_udf(df.SPEC_valid))
 		df = df.withColumn("SPEC_gross", transfer_unit_pandas_udf(df.SPEC_gross))
 		df = df.drop("SPEC_gross_digit", "SPEC_gross_unit", "SPEC_valid_digit", "SPEC_valid_unit")
-		df = df.withColumn("SPEC", concat("SPEC_co", "SPEC_percent", "SPEC_valid", "SPEC_gross")) \
-						.drop("SPEC_percent", "SPEC_co", "SPEC_valid", "SPEC_gross")
-
+		df = df.withColumn("SPEC_percent", percent_pandas_udf(df.SPEC_percent, df.SPEC_valid, df.SPEC_gross))
+		df = df.withColumn("SPEC_ept", lit(" "))
+		df = df.withColumn("SPEC", concat("SPEC_co", "SPEC_percent", "SPEC_ept", "SPEC_valid", "SPEC_ept", "SPEC_gross")) \
+						.drop("SPEC_percent", "SPEC_co", "SPEC_valid", "SPEC_gross", "SPEC_ept")
 		return df
 
 	df_cleanning = spec_standify(df_cleanning)
