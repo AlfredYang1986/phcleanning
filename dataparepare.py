@@ -76,7 +76,7 @@ def modify_pool_cleanning_prod(spark):
      #df_cleanning = df_cleanning.readStream.withColumn("id", monotonically_increasing_id())
 
      # 为了算法更高的并发，在这里将文件拆分为16个，然后以16的并发数开始跑人工智能
-     df_cleanning.repartition(1600).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/splitdata")
+     df_cleanning.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/splitdata")
      # return df_cleanning
 
 
@@ -129,4 +129,4 @@ def load_interfere_mapping(spark):
 	Load CrossJoin
 """
 def load_training_data(spark):
-     return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/crossJoin/data")
+     return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data2")

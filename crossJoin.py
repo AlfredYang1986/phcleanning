@@ -67,8 +67,7 @@ if __name__ == '__main__':
 	df_interfere = load_interfere_mapping(spark)
 
 	# 1. human interfere
-	# modify_pool_cleanning_prod(spark)
-	# df_cleanning = load_stream_cleanning_prod(spark)
+	modify_pool_cleanning_prod(spark)
 	df_cleanning = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/splitdata")
 	df_cleanning = df_cleanning.repartition(1600)
 	df_cleanning = human_interfere(spark, df_cleanning, df_interfere)
@@ -91,7 +90,7 @@ if __name__ == '__main__':
 					))
 
 	# 4. cutting
-	df_result = df_result.where((df_result.JACCARD_DISTANCE[0] < 0.4) & (df_result.JACCARD_DISTANCE[1] < 0.4))
+	df_result = df_result.where((df_result.JACCARD_DISTANCE[0] < 0.6) & (df_result.JACCARD_DISTANCE[1] < 0.6))
 
 
 	# 5. edit_distance is not very good for normalization probloms
@@ -128,14 +127,4 @@ if __name__ == '__main__':
 					when((df_result.PACK_ID_CHECK_NUM > 0) & (df_result.PACK_ID_STANDARD_NUM > 0) & (df_result.PACK_ID_CHECK_NUM == df_result.PACK_ID_STANDARD_NUM), 1.0).otherwise(0.0)) \
 					.drop("PACK_ID_CHECK_NUM", "PACK_ID_STANDARD_NUM")
 
-	# df_result.show()
-
-	# 3. save the steam
-	# query = df_result.writeStream \
-	# 			.format("parquet") \
-	# 			.option("checkpointLocation", "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/crossJoin/checkpoint") \
-	# 			.option("path", "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/crossJoin/data") \
-	# 			.start()
-
-	# query.awaitTermination()
-	df_result.repartition(16).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data2")
+	df_result.repartition(10).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data2")

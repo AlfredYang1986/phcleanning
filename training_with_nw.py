@@ -21,8 +21,7 @@ from pyspark.sql.functions import desc
 from pyspark.sql.functions import rank
 from pyspark.sql import Window
 from pyspark.ml.linalg import Vectors, VectorUDT
-# from pyspark.ml.classification import MultilayerPerceptronClassifier
-from pyspark.ml.classification import MultilayerPerceptronClassificationModel
+from pyspark.ml.classification import MultilayerPerceptronClassifier
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 
 
@@ -33,8 +32,8 @@ def prepare():
 		.master("yarn") \
 		.appName("CPA&GYC match refactor") \
 		.config("spark.driver.memory", "1g") \
-		.config("spark.executor.cores", "2") \
-		.config("spark.executor.instance", "4") \
+		.config("spark.executor.cores", "1") \
+		.config("spark.executor.instances", "2") \
 		.config("spark.executor.memory", "2g") \
 		.config('spark.sql.codegen.wholeStage', False) \
 		.getOrCreate()
@@ -52,57 +51,35 @@ def prepare():
 	return spark
 
 
-@udf(returnType=IntegerType())
-def check_similarity(packid_check, packid_standard):
-	if (packid_check == "") & (packid_standard == ""):
-		return 1
-	elif len(packid_check) == 0:
-		return 0
-	elif len(packid_standard) == 0:
-		return 0
-	else:
-		try:
-			if int(packid_check) == int(packid_standard):
-				return 1
-			else:
-				return 0
-		except ValueError:
-			return 0
-
 
 if __name__ == '__main__':
 	spark = prepare()
-	df_standard = load_standard_prod(spark)
-	df_cleanning = load_cleanning_prod(spark)
-	df_cleanning = df_cleanning.limit(100)
-	df_interfere = load_interfere_mapping(spark)
 
-	# 1. human interfere
-	df_cleanning = human_interfere(spark, df_cleanning, df_interfere)
-	df_cleanning.persist()
+	# 1. load the training data
+	df_result = load_training_data(spark)
+	df_training = df_result.select("id", "label", "features").orderBy("id")
 
-	# 2. cross join
-	df_result = feature_cal(spark, df_cleanning, df_standard)
-	df_result.persist()
+	# 2. Split the data into train and test
+	splits = df_training.randomSplit([0.6, 0.4], 1234)
+	train = splits[0]
+	test = splits[1]
 
-	vec_udf = udf(lambda vs: Vectors.dense(vs), VectorUDT())
-	similarity_udf = udf(lambda vs: 0.1 * vs[2] + 0.1 * vs[3] + 0.5 * vs[4] + 0.1 * vs[0] + 0.1 * vs[1] + 0.1 * vs[5], DoubleType())
-	df_result = df_result.withColumn("similarity", similarity_udf(df_result.featureCol))
-	df_result = df_result.where(df_result.similarity > 0.7)
-	df_result = df_result.withColumn("features", vec_udf(df_result.featureCol)) \
-					.withColumn("label", check_similarity(df_result.PACK_ID_CHECK, df_result.PACK_ID_STANDARD))
-	df_result.persist()
+	# 3. specify layers for the neural network:
+	# input layer of size 6 (features)
+	# and output of size 2 (boolean)
+	layers = [6, 3, 2]
 
-	df_validate = df_result.select("id", "label", "features").orderBy("id")
-	# 3. 对每个需要匹配的值做猜想排序
-	df_validate.show()
+	# 4. create the trainer and set its parameters
+	trainer = MultilayerPerceptronClassifier(maxIter=100, layers=layers, blockSize=128, seed=1234)
 
-	# 4. load model
-	model = MultilayerPerceptronClassificationModel.load("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/model")
+	# 5. train the model
+	model = trainer.fit(train)
 
-	# compute accuracy on the test set
-	result = model.transform(df_validate)
+	# 6. save the model
+	model.write().save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/nw")
+
+	# 7. compute accuracy on the test set
+	result = model.transform(test)
 	predictionAndLabels = result.select("id", "prediction", "label").orderBy("id")
-	predictionAndLabels.show()
 	evaluator = MulticlassClassificationEvaluator(metricName="accuracy")
 	print("Test set accuracy = " + str(evaluator.evaluate(predictionAndLabels)))

@@ -43,8 +43,6 @@ def prepare():
 		.config("spark.executor.instances", "4") \
 		.config("spark.executor.memory", "2g") \
 		.config('spark.sql.codegen.wholeStage', False) \
-		.config("spark.sql.autoBroadcastJoinThreshold", 1048576000) \
-		.config("spark.sql.files.maxRecordsPerFile", 554432) \
 		.config("spark.sql.execution.arrow.enabled", "true") \
 		.getOrCreate()
 
@@ -63,5 +61,10 @@ def prepare():
 
 if __name__ == '__main__':
 	spark = prepare()
-	df = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data")
+	# df = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/result")
+	df = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data2")
+	df = df.withColumn("JACCARD_DISTANCE_MOLE_NAME", df.JACCARD_DISTANCE[0]) \
+			.withColumn("JACCARD_DISTANCE_DOSAGE", df.JACCARD_DISTANCE[1]) \
+			.drop("JACCARD_DISTANCE", "features")
 	df.show()
+	df = df.orderBy("id").drop("features").repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/validate")
