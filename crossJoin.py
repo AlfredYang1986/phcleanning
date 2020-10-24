@@ -13,7 +13,7 @@ import os
 from pyspark.sql import SparkSession
 from dataparepare import *
 from interfere import *
-from feature import *
+# from feature import *
 from pdu_feature import *
 from specreformat import *
 # from similarity import *
@@ -68,7 +68,9 @@ if __name__ == '__main__':
 
 	# 1. human interfere
 	# modify_pool_cleanning_prod(spark)
-	df_cleanning = load_stream_cleanning_prod(spark)
+	# df_cleanning = load_stream_cleanning_prod(spark)
+	df_cleanning = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/splitdata")
+	df_cleanning = df_cleanning.repartition(1600)
 	df_cleanning = human_interfere(spark, df_cleanning, df_interfere)
 	df_cleanning = dosage_standify(df_cleanning)
 	df_cleanning = spec_standify(df_cleanning)
@@ -81,9 +83,22 @@ if __name__ == '__main__':
 	# 2. cross join
 	df_result = df_cleanning.crossJoin(broadcast(df_standard)).na.fill("")
 
-	# edit_distance
+	# 3. jaccard distance
+	df_result = df_result.withColumn("JACCARD_DISTANCE", \
+				efftiveness_with_jaccard_distance( \
+					df_result.MOLE_NAME, df_result.MOLE_NAME_STANDARD, \
+					df_result.DOSAGE, df_result.DOSAGE_STANDARD \
+					))
+
+	# 4. cutting
+	df_result = df_result.where((df_result.JACCARD_DISTANCE[0] < 0.4) & (df_result.JACCARD_DISTANCE[1] < 0.4))
+
+
+	# 5. edit_distance is not very good for normalization probloms
+	# we use jaro_winkler_similarity instead
+	# if not good enough, change back to edit distance
 	df_result = df_result.withColumn("EFFTIVENESS", \
-					efftiveness_with_edit_distance( \
+					efftiveness_with_jaro_winkler_similarity( \
 						df_result.MOLE_NAME, df_result.MOLE_NAME_STANDARD, \
 						df_result.PRODUCT_NAME, df_result.PRODUCT_NAME_STANDARD, \
 						df_result.DOSAGE, df_result.DOSAGE_STANDARD, \
@@ -92,22 +107,35 @@ if __name__ == '__main__':
 						df_result.MANUFACTURER_NAME, df_result.MANUFACTURER_NAME_STANDARD, df_result.MANUFACTURER_NAME_EN_STANDARD \
 						))
 
-	# # features
-	# assembler = VectorAssembler( \
-	# 				inputCols=["MOLE_NAME_ED", "PRODUCT_NAME_ED", "DOSAGE_ED", "SPEC_ED", "PACK_QTY_ED", "MANUFACTURER_NAME_ED"], \
-	# 				outputCol="features")
-	# df_result = assembler.transform(df_result)
+	df_result = df_result.withColumn("EFFTIVENESS_MOLE_NAME", df_result.EFFTIVENESS[0]) \
+					.withColumn("EFFTIVENESS_PRODUCT_NAME", df_result.EFFTIVENESS[1]) \
+					.withColumn("EFFTIVENESS_DOSAGE", df_result.EFFTIVENESS[2]) \
+					.withColumn("EFFTIVENESS_SPEC", df_result.EFFTIVENESS[3]) \
+					.withColumn("EFFTIVENESS_PACK_QTY", df_result.EFFTIVENESS[4]) \
+					.withColumn("EFFTIVENESS_MANUFACTURER", df_result.EFFTIVENESS[5]) \
+					.drop("EFFTIVENESS")
 
-	# df_result = df_result.withColumn("PACK_ID_CHECK_NUM", df_result.PACK_ID_CHECK.cast("int")).na.fill({"PACK_ID_CHECK_NUM": -1})
-	# df_result = df_result.withColumn("PACK_ID_STANDARD_NUM", df_result.PACK_ID_STANDARD.cast("int")).na.fill({"PACK_ID_STANDARD_NUM": -1})
-	# df_result = df_result.withColumn("label",
-	# 				when((df_result.PACK_ID_CHECK_NUM > 0) & (df_result.PACK_ID_STANDARD_NUM > 0) & (df_result.PACK_ID_CHECK_NUM == df_result.PACK_ID_STANDARD_NUM), 1.0).otherwise(0.0))
+	# features
+	assembler = VectorAssembler( \
+					inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_SPEC", \
+								"EFFTIVENESS_PACK_QTY", "EFFTIVENESS_MANUFACTURER"], \
+					outputCol="features")
+	df_result = assembler.transform(df_result)
+
+	df_result = df_result.withColumn("PACK_ID_CHECK_NUM", df_result.PACK_ID_CHECK.cast("int")).na.fill({"PACK_ID_CHECK_NUM": -1})
+	df_result = df_result.withColumn("PACK_ID_STANDARD_NUM", df_result.PACK_ID_STANDARD.cast("int")).na.fill({"PACK_ID_STANDARD_NUM": -1})
+	df_result = df_result.withColumn("label",
+					when((df_result.PACK_ID_CHECK_NUM > 0) & (df_result.PACK_ID_STANDARD_NUM > 0) & (df_result.PACK_ID_CHECK_NUM == df_result.PACK_ID_STANDARD_NUM), 1.0).otherwise(0.0)) \
+					.drop("PACK_ID_CHECK_NUM", "PACK_ID_STANDARD_NUM")
+
+	# df_result.show()
 
 	# 3. save the steam
-	query = df_result.writeStream \
-				.format("parquet") \
-				.option("checkpointLocation", "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/crossJoin2/checkpoint") \
-				.option("path", "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/crossJoin2/data") \
-				.start()
+	# query = df_result.writeStream \
+	# 			.format("parquet") \
+	# 			.option("checkpointLocation", "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/crossJoin/checkpoint") \
+	# 			.option("path", "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/crossJoin/data") \
+	# 			.start()
 
-	query.awaitTermination()
+	# query.awaitTermination()
+	df_result.repartition(16).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data2")
