@@ -13,16 +13,13 @@ import os
 from pyspark.sql import SparkSession
 from dataparepare import *
 from interfere import *
-# from feature import *
 from pdu_feature import *
-from specreformat import *
-# from similarity import *
-# from oldsimi import *
 from pyspark.sql.types import *
 from pyspark.sql.functions import desc
 from pyspark.sql.functions import rank
 from pyspark.sql.functions import when
 from pyspark.sql.functions import array
+from pyspark.sql.functions import broadcast
 from pyspark.sql import Window
 from pyspark.ml.linalg import Vectors, VectorUDT
 from pyspark.ml.classification import MultilayerPerceptronClassifier
@@ -89,8 +86,9 @@ if __name__ == '__main__':
 					df_result.DOSAGE, df_result.DOSAGE_STANDARD \
 					))
 
-	# 4. cutting
-	df_result = df_result.where((df_result.JACCARD_DISTANCE[0] < 0.6) & (df_result.JACCARD_DISTANCE[1] < 0.6))
+	# 4. cutting for reduce the calculation
+	# df_result = df_result.where((df_result.JACCARD_DISTANCE[0] < 0.6) & (df_result.JACCARD_DISTANCE[1] < 0.9))
+	df_result = df_result.where((df_result.JACCARD_DISTANCE[0] < 0.6))
 
 
 	# 5. edit_distance is not very good for normalization probloms
@@ -114,6 +112,8 @@ if __name__ == '__main__':
 					.withColumn("EFFTIVENESS_MANUFACTURER", df_result.EFFTIVENESS[5]) \
 					.drop("EFFTIVENESS")
 
+	# df_result.show()
+
 	# features
 	assembler = VectorAssembler( \
 					inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_SPEC", \
@@ -127,4 +127,4 @@ if __name__ == '__main__':
 					when((df_result.PACK_ID_CHECK_NUM > 0) & (df_result.PACK_ID_STANDARD_NUM > 0) & (df_result.PACK_ID_CHECK_NUM == df_result.PACK_ID_STANDARD_NUM), 1.0).otherwise(0.0)) \
 					.drop("PACK_ID_CHECK_NUM", "PACK_ID_STANDARD_NUM")
 
-	df_result.repartition(10).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data2")
+	df_result.repartition(10).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data3")

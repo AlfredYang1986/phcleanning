@@ -13,23 +13,7 @@ import os
 from pyspark.sql import SparkSession
 from dataparepare import *
 from interfere import *
-# from feature import *
 from pdu_feature import *
-from specreformat import *
-# from similarity import *
-# from oldsimi import *
-from pyspark.sql.types import *
-from pyspark.sql.functions import desc
-from pyspark.sql.functions import rank
-from pyspark.sql.functions import when
-from pyspark.sql.functions import array
-from pyspark.sql import Window
-from pyspark.ml.linalg import Vectors, VectorUDT
-from pyspark.ml.classification import MultilayerPerceptronClassifier
-from pyspark.ml.evaluation import MulticlassClassificationEvaluator
-from pyspark.ml.feature import VectorAssembler
-import re
-import pandas as pd
 
 
 def prepare():
@@ -61,10 +45,10 @@ def prepare():
 
 if __name__ == '__main__':
 	spark = prepare()
-	# df = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/result")
-	df = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data2")
-	df = df.withColumn("JACCARD_DISTANCE_MOLE_NAME", df.JACCARD_DISTANCE[0]) \
-			.withColumn("JACCARD_DISTANCE_DOSAGE", df.JACCARD_DISTANCE[1]) \
-			.drop("JACCARD_DISTANCE", "features")
+	df = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/azsanofi_check/0.0.12/raw_data")
+	# df = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data2")
+	# df = df.withColumn("JACCARD_DISTANCE_MOLE_NAME", df.JACCARD_DISTANCE[0]) \
+	# 		.withColumn("JACCARD_DISTANCE_DOSAGE", df.JACCARD_DISTANCE[1]) \
+	# 		.drop("JACCARD_DISTANCE", "features")
 	df.show()
-	df = df.orderBy("id").drop("features").repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/validate")
+	# df = df.orderBy("id").drop("features").repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/validate")

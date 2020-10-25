@@ -13,8 +13,6 @@ import os
 from pyspark.sql import SparkSession
 from dataparepare import *
 from interfere import *
-# from similarity import *
-from oldsimi import *
 from pyspark.sql.types import *
 from pyspark.sql.functions import desc
 from pyspark.sql.functions import rank

@@ -13,9 +13,6 @@ import os
 from pyspark.sql import SparkSession
 from dataparepare import *
 from interfere import *
-from feature import *
-# from similarity import *
-# from oldsimi import *
 from pyspark.sql.types import *
 from pyspark.sql.functions import desc
 from pyspark.sql.functions import rank
@@ -60,13 +57,29 @@ if __name__ == '__main__':
 
 	# 1. load the training data
 	df_result = load_training_data(spark)
+
+	# 1.5. cutting for the more accurate training
+	df_result = df_result.withColumn("SIMILARITY", \
+					df_result.EFFTIVENESS_MOLE_NAME + \
+					df_result.EFFTIVENESS_PRODUCT_NAME + \
+					df_result.EFFTIVENESS_DOSAGE + \
+					df_result.EFFTIVENESS_SPEC + \
+					df_result.EFFTIVENESS_PACK_QTY + \
+					df_result.EFFTIVENESS_MANUFACTURER)
+
+	windowSpec  = Window.partitionBy("id").orderBy(desc("SIMILARITY"))
+
+	df_result = df_result.withColumn("RANK", rank().over(windowSpec))
+	df_result = df_result.where(df_result.RANK <= 5)
+	df_result.persist()
+
 	data_training = df_result.select("id", "label", "features").orderBy("id")
 
 	# 2. Split the data into train and test
 	labelIndexer = StringIndexer(inputCol="label", outputCol="indexedLabel").fit(data_training)
 
 	# 3. specify layers for the neural network:
-	featureIndexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=6).fit(data_training)
+	featureIndexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=2).fit(data_training)
 
 	# 4. create the trainer and set its parameters
 	# Split the data into training and test sets (30% held out for testing)
@@ -97,4 +110,4 @@ if __name__ == '__main__':
 	# summary only
 	print(treeModel)
 
-	model.write().save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/dt")
+	model.write().overwrite().save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/dt")

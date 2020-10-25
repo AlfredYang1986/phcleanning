@@ -13,9 +13,6 @@ import os
 from pyspark.sql import SparkSession
 from dataparepare import *
 from interfere import *
-from feature import *
-# from similarity import *
-# from oldsimi import *
 from pyspark.sql.types import *
 from pyspark.sql.functions import desc
 from pyspark.sql.functions import rank
@@ -66,6 +63,9 @@ if __name__ == '__main__':
 
 	# 3. compute accuracy on the test set
 	predictions = model.transform(df_validate)
+	predictions.where((predictions.label == 1.0) & (predictions.prediction == 0.0)).show(truncate=False)
+	# predictions.where((predictions.label == 1.0) & (predictions.prediction == 0.0)).select("id", "label", "probability", "prediction").show(truncate=False)
+	# predictions.where((predictions.label == 1.0) & (predictions.prediction == 1.0)).select("id", "label", "probability", "prediction").show(truncate=False)
 	evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
 	accuracy = evaluator.evaluate(predictions)
 	print("Test Error = %g " % (1.0 - accuracy))

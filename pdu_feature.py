@@ -12,8 +12,16 @@
 import os
 from pyspark.sql.functions import pandas_udf
 from pyspark.sql.types import *
-from pyspark.sql.functions import regexp_replace
+from pyspark.sql.functions import regexp_replace, regexp_extract
 from pyspark.sql.functions import pandas_udf, PandasUDFType
+from pyspark.sql.functions import upper
+from pyspark.sql.functions import lit
+from pyspark.sql.functions import concat
+from pyspark.sql.functions import desc
+from pyspark.sql.functions import rank
+from pyspark.sql.functions import when
+from pyspark.sql import Window
+import re
 import numpy as np
 import pandas as pd
 from nltk.metrics import edit_distance as ed
@@ -225,7 +233,8 @@ def efftiveness_with_jaro_winkler_similarity(mo, ms, po, ps, do, ds, so, ss, qo,
 	df["SPEC_JWS"] = df.apply(lambda x: 1 if x["SPEC"] in x ["SPEC_STANDARD"] \
 										else 1 if x["SPEC_STANDARD"] in x ["SPEC"] \
 										else jaro_winkler_similarity(x["SPEC"], x["SPEC_STANDARD"]), axis=1)
-	df["PACK_QTY_JWS"] = df.apply(lambda x: jaro_winkler_similarity(x["PACK_QTY"], x["PACK_QTY_STANDARD"].replace(".0", "")), axis=1)
+	df["PACK_QTY_JWS"] = df.apply(lambda x: 1 if x["PACK_QTY"] == x["PACK_QTY_STANDARD"].replace(".0", "") \
+										else jaro_winkler_similarity(x["PACK_QTY"], x["PACK_QTY_STANDARD"].replace(".0", "")), axis=1)
 	df["MANUFACTURER_NAME_CH_JWS"] = df.apply(lambda x: 1 if x["MANUFACTURER_NAME"] in x ["MANUFACTURER_NAME_STANDARD"] \
 										else 1 if x["MANUFACTURER_NAME_STANDARD"] in x ["MANUFACTURER_NAME"] \
 										else jaro_winkler_similarity(x["MANUFACTURER_NAME"], x["MANUFACTURER_NAME_STANDARD"]), axis=1)
@@ -246,3 +255,135 @@ def efftiveness_with_jaro_winkler_similarity(mo, ms, po, ps, do, ds, so, ss, qo,
 	return df["RESULT"]
 
 
+@pandas_udf(StringType(), PandasUDFType.SCALAR)
+def transfer_unit_pandas_udf(value):
+	def unit_transform(spec_str):
+		# 拆分数字和单位
+		digit_regex = '\d+\.?\d*e?-?\d*?'
+		# digit_regex = '0.\d*'
+		try:
+			if spec_str != "":
+				value = re.findall(digit_regex, spec_str)[0]
+				unit = spec_str.strip(value)  # type = str
+				# value = float(value)  # type = float
+				try:
+					value = float(value)  # type = float
+				except ValueError:
+					value = 0.0
+
+				# value transform
+				if unit == "G" or unit == "GM":
+					value = value *1000
+				elif unit == "UG":
+					value = value /1000
+				elif unit == "L":
+					value = value *1000
+				elif unit == "TU" or unit == "TIU":
+					value = value *10000
+				elif unit == "MU" or unit == "MIU" or unit == "M":
+					value = value *1000000
+
+				# unit transform
+				unit_switch = {
+						"G": "MG",
+						"GM": "MG",
+						"MG": "MG",
+						"UG": "MG",
+						"L": "ML",
+						"AXAU": "U",
+						"AXAIU": "U",
+						"IU": "U",
+						"TU": "U",
+						"TIU": "U",
+						"MU": "U",
+						"MIU": "U",
+						"M": "U",
+					}
+				try:
+					unit = unit_switch[unit]
+				except KeyError:
+					pass
+
+			else:
+				unit = ""
+				value = ""
+
+			return str(value) + unit
+
+		except Exception:
+			return spec_str
+
+	frame = { "SPEC": value }
+	df = pd.DataFrame(frame)
+	df["RESULT"] = df["SPEC"].apply(unit_transform)
+	return df["RESULT"]
+
+
+@pandas_udf(StringType(), PandasUDFType.SCALAR)
+def percent_pandas_udf(percent, valid, gross):
+	def percent_calculation(percent, valid, gross):
+		digit_regex = '\d+\.?\d*e?-?\d*?'
+		if percent != "" and valid != "" and gross == "":
+			num = int(percent.strip("%"))
+			value = re.findall(digit_regex, valid)[0]
+			unit = valid.strip(value)  # type = str
+			final_num = num*float(value)*0.01
+			result = str(final_num) + unit
+
+		elif percent != "" and valid!= "" and gross != "":
+			result = ""
+
+		else:
+			result = percent
+		return result
+
+	frame = { "percent": percent, "valid": valid, "gross": gross }
+	df = pd.DataFrame(frame)
+	df["RESULT"] = df.apply(lambda x: percent_calculation(x["percent"], x["valid"], x["gross"]), axis=1)
+	return df["RESULT"]
+
+
+
+def spec_standify(df):
+	df = df.withColumn("SPEC", regexp_replace("SPEC", r"(万)", "T"))
+	df = df.withColumn("SPEC", regexp_replace("SPEC", r"(μ)", "U"))
+	df = df.withColumn("SPEC", upper(df.SPEC))
+	# df = df.withColumn("SPEC_gross", regexp_extract('SPEC', spec_regex, 2))
+	# 拆分规格的成分
+	df = df.withColumn("SPEC_percent", regexp_extract('SPEC', r'(\d+%)', 1))
+	df = df.withColumn("SPEC_co", regexp_extract('SPEC', r'(CO)', 1))
+	spec_valid_regex =  r'([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)'
+	df = df.withColumn("SPEC_valid", regexp_extract('SPEC', spec_valid_regex, 1))
+	spec_gross_regex =  r'([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)[ /:∶+\s]([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)'
+	df = df.withColumn("SPEC_gross", regexp_extract('SPEC', spec_gross_regex, 2))
+
+	digit_regex_spec = r'(\d+\.?\d*e?-?\d*?)'
+	df = df.withColumn("SPEC_gross_digit", regexp_extract('SPEC_gross', digit_regex_spec, 1))
+	df = df.withColumn("SPEC_gross_unit", regexp_replace('SPEC_gross', digit_regex_spec, ""))
+	df = df.withColumn("SPEC_valid_digit", regexp_extract('SPEC_valid', digit_regex_spec, 1))
+	df = df.withColumn("SPEC_valid_unit", regexp_replace('SPEC_valid', digit_regex_spec, ""))
+
+	df = df.withColumn("SPEC_valid", transfer_unit_pandas_udf(df.SPEC_valid))
+	df = df.withColumn("SPEC_gross", transfer_unit_pandas_udf(df.SPEC_gross))
+	df = df.drop("SPEC_gross_digit", "SPEC_gross_unit", "SPEC_valid_digit", "SPEC_valid_unit")
+	df = df.withColumn("SPEC_percent", percent_pandas_udf(df.SPEC_percent, df.SPEC_valid, df.SPEC_gross))
+	df = df.withColumn("SPEC_ept", lit(" "))
+	df = df.withColumn("SPEC", concat("SPEC_co", "SPEC_percent", "SPEC_ept", "SPEC_valid", "SPEC_ept", "SPEC_gross")) \
+					.drop("SPEC_percent", "SPEC_co", "SPEC_valid", "SPEC_gross", "SPEC_ept")
+	return df
+
+
+def similarity(df):
+	df = df.withColumn("SIMILARITY", df.EFFTIVENESS_MOLE_NAME + df.EFFTIVENESS_PRODUCT_NAME + df.EFFTIVENESS_DOSAGE \
+						+ df.EFFTIVENESS_SPEC + df.EFFTIVENESS_PACK_QTY + df.EFFTIVENESS_MANUFACTURER)
+
+	windowSpec  = Window.partitionBy("id").orderBy(desc("SIMILARITY"))
+
+	df = df.withColumn("RANK", rank().over(windowSpec))
+	df = df.where((df.RANK <= 5) | (df.label == 1.0))
+
+	return df
+
+
+def hit_place_prediction(df, pos):
+	return df.withColumn("prediction_" + str(pos), when((df.RANK == pos) & (df.label == 1.0), 1.0).otherwise(0.0))
