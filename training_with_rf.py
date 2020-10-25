@@ -66,17 +66,18 @@ if __name__ == '__main__':
 	labelIndexer = StringIndexer(inputCol="label", outputCol="indexedLabel").fit(data_training)
 
 	# 3. specify layers for the neural network:
-	featureIndexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=4).fit(data_training)
+	featureIndexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=6).fit(data_training)
 
 	# 4. create the trainer and set its parameters
 	# Split the data into training and test sets (30% held out for testing)
 	(trainingData, testData) = data_training.randomSplit([0.7, 0.3])
 
 	# Train a DecisionTree model.
-	dt = RandomForestClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures")
+	rf = RandomForestClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures", numTrees=10)
 
 	# Chain indexers and tree in a Pipeline
-	pipeline = Pipeline(stages=[labelIndexer, featureIndexer, dt])
+	labelConverter = IndexToString(inputCol="prediction", outputCol="predictedLabel", labels=labelIndexer.labels)
+	pipeline = Pipeline(stages=[labelIndexer, featureIndexer, rf, labelConverter])
 
 	# Train model.  This also runs the indexers.
 	model = pipeline.fit(trainingData)

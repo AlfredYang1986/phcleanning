@@ -66,7 +66,7 @@ if __name__ == '__main__':
 	labelIndexer = StringIndexer(inputCol="label", outputCol="indexedLabel").fit(data_training)
 
 	# 3. specify layers for the neural network:
-	featureIndexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=4).fit(data_training)
+	featureIndexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=6).fit(data_training)
 
 	# 4. create the trainer and set its parameters
 	# Split the data into training and test sets (30% held out for testing)
@@ -96,5 +96,5 @@ if __name__ == '__main__':
 	treeModel = model.stages[2]
 	# summary only
 	print(treeModel)
-	
+
 	model.write().save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/dt")
