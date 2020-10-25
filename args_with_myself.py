@@ -110,7 +110,7 @@ if __name__ == '__main__':
 	df_result = df_result.drop("prediction", "prediction_1", "prediction_2", "prediction_3", "prediction_4", "prediction_5").drop("JACCARD_DISTANCE", "features")
 	df_result.orderBy("id", "RANK").repartition(1).write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/validate/error_match")
 
-	# 3.2 本身就没有pack id的数据
+	# 3.2 本身就没有pack id的数据，也可能是我在第一步通过简单算法而过滤掉的数据
 	df_no_label = df_no_label.where(df_no_label.label == 0.0)
 	print("本身没有label的数据 = " + str(df_no_label.count()))
 	df_no_label.orderBy("id").repartition(1).write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/validate/error_label")
