@@ -117,4 +117,3 @@ if __name__ == '__main__':
 	df_no_replace.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/azsanofi/0.0.4/no_replace")
 	# df_no_replace.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.15/no_replace")
 
-
