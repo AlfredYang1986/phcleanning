@@ -13,8 +13,6 @@ import os
 from pyspark.sql import SparkSession
 from dataparepare import *
 from interfere import *
-# from similarity import *
-from oldsimi import *
 from pyspark.sql.types import *
 from pyspark.sql.functions import desc
 from pyspark.sql.functions import rank
@@ -118,5 +116,4 @@ if __name__ == '__main__':
 	# df_replace.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.15/replace")
 	df_no_replace.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/azsanofi/0.0.4/no_replace")
 	# df_no_replace.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/0.0.15/no_replace")
-
 

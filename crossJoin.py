@@ -9,7 +9,6 @@ import os
 from pyspark.sql import SparkSession
 from dataparepare import *
 from interfere import *
-from feature import *
 from pdu_feature import *
 from pyspark.sql.types import *
 from pyspark.sql.functions import desc
@@ -112,26 +111,18 @@ if __name__ == '__main__':
 
 	# df_result.show()
 
-<<<<<<<<< saved version
-
-=========
 	# features
 	assembler = VectorAssembler( \  # 将多列数据转化为单列的向量列
 					inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_SPEC", \
 								"EFFTIVENESS_PACK_QTY", "EFFTIVENESS_MANUFACTURER"], \
 					outputCol="features")
 	df_result = assembler.transform(df_result)
->>>>>>>>> local version
 
-	# 3. save the steam
-	# query = df_result.writeStream \
-	# 			.format("parquet") \
-	# 			.option("checkpointLocation", "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/crossJoin2/checkpoint") \
-	# 			.option("path", "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/crossJoin2/data") \
-	# 			.start()
+	df_result = df_result.withColumn("PACK_ID_CHECK_NUM", df_result.PACK_ID_CHECK.cast("int")).na.fill({"PACK_ID_CHECK_NUM": -1})
+	df_result = df_result.withColumn("PACK_ID_STANDARD_NUM", df_result.PACK_ID_STANDARD.cast("int")).na.fill({"PACK_ID_STANDARD_NUM": -1})
+	df_result = df_result.withColumn("label",
+					when((df_result.PACK_ID_CHECK_NUM > 0) & (df_result.PACK_ID_STANDARD_NUM > 0) & (df_result.PACK_ID_CHECK_NUM == df_result.PACK_ID_STANDARD_NUM), 1.0).otherwise(0.0)) \
+					.drop("PACK_ID_CHECK_NUM", "PACK_ID_STANDARD_NUM")
 
-<<<<<<<<< saved version
-
-=========
 	df_result.repartition(10).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data3")
->>>>>>>>> local version
+  

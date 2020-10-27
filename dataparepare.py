@@ -134,9 +134,6 @@ def load_interfere_mapping(spark):
 	Load CrossJoin
 """
 def load_training_data(spark):
-<<<<<<<<< saved version
-
-=========
      # return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data2") # pifer
      return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data3") # az
 
@@ -147,4 +144,3 @@ download stand
 def download_prod_standard(spark):
      df = load_standard_prod(spark)
      df.repartition(1).write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/standard")
->>>>>>>>> local version

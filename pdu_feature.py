@@ -108,9 +108,6 @@ def efftiveness_with_edit_distance(mo, ms, po, ps, do, ds, so, ss, qo, qs, mf, m
 	return df["RESULT"]
 
 
-<<<<<<<<< saved version
-
-=========
 """
 	由于高级的字符串匹配算法的时间复杂度过高，
 	在大量的数据量的情况下需要通过简单的数据算法过滤掉不一样的数据
@@ -179,26 +176,42 @@ def efftiveness_with_jaro_winkler_similarity(mo, ms, po, ps, do, ds, so, ss, qo,
 
 		if matches == 0:
 			return 0
->>>>>>>>> local version
 		else:
-			result.append(ed(a[index], b[index]))
-
-	return pd.Series(result)
-
-
-@pandas_udf(DoubleType(), PandasUDFType.SCALAR)
-def edit_distance_with_float_change_pandas_udf(a, b):
-	row_num = a.shape[0]
-	result = []
-	for index in range(row_num):
-		result.append(ed(a[index], b[index].replace(".0", "")))
-
-	return pd.Series(result)
+			return (
+				1
+				/ 3
+				* (
+					matches / len_s1
+					+ matches / len_s2
+					+ (matches - transpositions // 2) / matches
+				)
+			)
 
 
-<<<<<<<<< saved version
+	def jaro_winkler_similarity(s1, s2, p=0.1, max_l=4):
+		if not 0 <= max_l * p <= 1:
+		    print("The product  `max_l * p` might not fall between [0,1].Jaro-Winkler similarity might not be between 0 and 1.")
 
-=========
+		# Compute the Jaro similarity
+		jaro_sim = jaro_similarity(s1, s2)
+
+		# Initialize the upper bound for the no. of prefixes.
+		# if user did not pre-define the upperbound,
+		# use shorter length between s1 and s2
+
+		# Compute the prefix matches.
+		l = 0
+		# zip() will automatically loop until the end of shorter string.
+		for s1_i, s2_i in zip(s1, s2):
+			if s1_i == s2_i:
+				l += 1
+			else:
+				break
+			if l == max_l:
+				break
+		# Return the similarity value as described in docstring.
+		return jaro_sim + (l * p * (1 - jaro_sim))
+
 
 	frame = {
 		"MOLE_NAME": mo, "MOLE_NAME_STANDARD": ms,
@@ -374,4 +387,3 @@ def similarity(df):
 
 def hit_place_prediction(df, pos):
 	return df.withColumn("prediction_" + str(pos), when((df.RANK == pos) & (df.label == 1.0), 1.0).otherwise(0.0))
->>>>>>>>> local version
