@@ -50,8 +50,8 @@ if __name__ == '__main__':
 
 	df_result = load_training_data(spark)
 	df_result = similarity(df_result)
-	download_prod_standard(spark)
-
+	# download_prod_standard(spark)
+	
 	# 0. check the result
 	total_hit = df_result.where(df_result.label == 1.0).count()
 	print("正确数据总数 = " + str(total_hit))
@@ -87,6 +87,7 @@ if __name__ == '__main__':
 	print("第五正确匹配pack id 数量 = " + str(positive_hit_5))
 
 	# 2.6 count the accurcy of right hit number
+	
 	print("正确匹配pack id 率 = " + str((positive_hit_1 + positive_hit_2 + positive_hit_3 + positive_hit_4 + positive_hit_5) / total_count))
 	print("在有pack id的数据中，正确匹配pack id 率 = " + str((positive_hit_1 + positive_hit_2 + positive_hit_3 + positive_hit_4 + positive_hit_5) / total_hit))
 
@@ -108,9 +109,12 @@ if __name__ == '__main__':
 	# 3.1 完全匹配错误的数据
 	print("算法前五没有匹配的数据 = " + str(df_result.count()))
 	df_result = df_result.drop("prediction", "prediction_1", "prediction_2", "prediction_3", "prediction_4", "prediction_5").drop("JACCARD_DISTANCE", "features")
-	df_result.orderBy("id", "RANK").repartition(1).write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/validate/error_match")
-
+	# df_result.orderBy("id", "RANK").repartition(1).write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/validate/error_match")
+	df_result.orderBy("id", "RANK").repartition(1).write.format("parquet").mode("overwrite").option("header", "true").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/validate/error_match/error_match_par")
+	
 	# 3.2 本身就没有pack id的数据，也可能是我在第一步通过简单算法而过滤掉的数据
+	# 本身没有packid 或者匹配出的packid不能为整数 或者机器匹配的packid ！= 人工匹配的packid
 	df_no_label = df_no_label.where(df_no_label.label == 0.0)
 	print("本身没有label的数据 = " + str(df_no_label.count()))
-	df_no_label.orderBy("id").repartition(1).write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/validate/error_label")
+	# df_no_label.orderBy("id").repartition(1).write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/validate/error_label")
+	

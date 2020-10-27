@@ -1,11 +1,7 @@
 # -*- coding: utf-8 -*-
 """alfredyang@pharbers.com.
 
-功能描述：job3：left join cpa和prod
-  * @author yzy
-  * @version 0.0
-  * @since 2020/08/12
-  * @note  落盘数据：cpa_prod_join
+功能描述：crossJoin
 
 """
 
@@ -27,6 +23,7 @@ from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.ml.feature import VectorAssembler
 import re
 import pandas as pd
+
 
 
 def prepare():
@@ -63,14 +60,13 @@ if __name__ == '__main__':
 	df_standard = load_standard_prod(spark)
 	df_interfere = load_interfere_mapping(spark)
 
-	# 1. human interfere
-	modify_pool_cleanning_prod(spark)
+	# 1. human interfere 与 数据准备
+	modify_pool_cleanning_prod(spark)  # 更高的并发数
 	df_cleanning = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/splitdata")
 	df_cleanning = df_cleanning.repartition(1600)
 	df_cleanning = human_interfere(spark, df_cleanning, df_interfere)
-	df_cleanning = dosage_standify(df_cleanning)
-	df_cleanning = spec_standify(df_cleanning)
-	df_cleanning = dosage_standify(df_cleanning)
+	df_cleanning = dosage_standify(df_cleanning)  # 剂型列规范
+	df_cleanning = spec_standify(df_cleanning)  # 规格列规范
 
 	df_standard = df_standard.withColumn("SPEC", df_standard.SPEC_STANDARD)
 	df_standard = spec_standify(df_standard)
@@ -80,6 +76,7 @@ if __name__ == '__main__':
 	df_result = df_cleanning.crossJoin(broadcast(df_standard)).na.fill("")
 
 	# 3. jaccard distance
+	# 得到一个list，里面是mole_name 和 doasge 的 jd 数值
 	df_result = df_result.withColumn("JACCARD_DISTANCE", \
 				efftiveness_with_jaccard_distance( \
 					df_result.MOLE_NAME, df_result.MOLE_NAME_STANDARD, \
@@ -88,7 +85,7 @@ if __name__ == '__main__':
 
 	# 4. cutting for reduce the calculation
 	# df_result = df_result.where((df_result.JACCARD_DISTANCE[0] < 0.6) & (df_result.JACCARD_DISTANCE[1] < 0.9))
-	df_result = df_result.where((df_result.JACCARD_DISTANCE[0] < 0.6))
+	df_result = df_result.where((df_result.JACCARD_DISTANCE[0] < 0.6))  # 目前只取了分子名来判断
 
 
 	# 5. edit_distance is not very good for normalization probloms
@@ -115,7 +112,7 @@ if __name__ == '__main__':
 	# df_result.show()
 
 	# features
-	assembler = VectorAssembler( \
+	assembler = VectorAssembler( \  # 将多列数据转化为单列的向量列
 					inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_SPEC", \
 								"EFFTIVENESS_PACK_QTY", "EFFTIVENESS_MANUFACTURER"], \
 					outputCol="features")
