@@ -54,10 +54,12 @@ def load_standard_prod(spark):
 读取待清洗的数据
 """
 def load_cleanning_prod(spark):
-     df_cleanning = spark.read.parquet("s3a://ph-stream/common/public/pfizer_check").drop("version")
+     # df_cleanning = spark.read.parquet("s3a://ph-stream/common/public/pfizer_check").drop("version")
+     df_cleanning = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/azsanofi_check/0.0.12/raw_data").drop("version")
 
      # 为了验证算法，保证id尽可能可读性，投入使用后需要删除
      df_cleanning = df_cleanning.repartition(1).withColumn("id", monotonically_increasing_id())
+     print(df_cleanning.count())
      #df_cleanning = df_cleanning.readStream.withColumn("id", monotonically_increasing_id())
 
      # 为了算法更高的并发，在这里将文件拆分为16个，然后以16的并发数开始跑人工智能
@@ -69,14 +71,17 @@ def load_cleanning_prod(spark):
 更高的并发数
 """
 def modify_pool_cleanning_prod(spark):
-     df_cleanning = spark.read.parquet("s3a://ph-stream/common/public/pfizer_check").drop("version")
+     # df_cleanning = spark.read.parquet("s3a://ph-stream/common/public/pfizer_check").drop("version")
+     df_cleanning = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/azsanofi_check")
 
      # 为了验证算法，保证id尽可能可读性，投入使用后需要删除
      df_cleanning = df_cleanning.repartition(1).withColumn("id", monotonically_increasing_id())
      #df_cleanning = df_cleanning.readStream.withColumn("id", monotonically_increasing_id())
+     print(df_cleanning.count())
+     df_cleanning.show()
 
      # 为了算法更高的并发，在这里将文件拆分为16个，然后以16的并发数开始跑人工智能
-     df_cleanning.repartition(16).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/splitdata")
+     df_cleanning.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/splitdata")
      # return df_cleanning
 
 
@@ -129,4 +134,17 @@ def load_interfere_mapping(spark):
 	Load CrossJoin
 """
 def load_training_data(spark):
-     return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/crossJoin/data")
+<<<<<<<<< saved version
+
+=========
+     # return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data2") # pifer
+     return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data3") # az
+
+
+"""
+download stand
+"""
+def download_prod_standard(spark):
+     df = load_standard_prod(spark)
+     df.repartition(1).write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/standard")
+>>>>>>>>> local version
