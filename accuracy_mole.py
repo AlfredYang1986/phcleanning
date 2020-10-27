@@ -58,11 +58,11 @@ def execute():
 	def cal_percentage_pandas_udf(df):
 	
 		df = df[(df["label"] == 1.0)]
-		total_count = df.count()
-		df_right =  df[(df["RANK"] <= 5)]
-		right_count = df_right.count()
-		per = right_count / total_count
-		df["per"] = per
+		total_count = len(df)
+# 		df_right =  df[(df["RANK"] <= 5)]
+# 		right_count = df_right.count()
+# 		per = right_count / total_count
+		df["per"] = total_count
 		return df
 	
 	# df_result = df_result.filter(df_result.MOLE_NAME == "沙丁胺醇")
