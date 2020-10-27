@@ -1,11 +1,7 @@
 # -*- coding: utf-8 -*-
 """alfredyang@pharbers.com.
 
-功能描述：job3：left join cpa和prod
-  * @author yzy
-  * @version 0.0
-  * @since 2020/08/12
-  * @note  落盘数据：cpa_prod_join
+功能描述：crossJoin
 
 """
 
@@ -13,16 +9,13 @@ import os
 from pyspark.sql import SparkSession
 from dataparepare import *
 from interfere import *
-from feature import *
 from pdu_feature import *
-from specreformat import *
-# from similarity import *
-# from oldsimi import *
 from pyspark.sql.types import *
 from pyspark.sql.functions import desc
 from pyspark.sql.functions import rank
 from pyspark.sql.functions import when
 from pyspark.sql.functions import array
+from pyspark.sql.functions import broadcast
 from pyspark.sql import Window
 from pyspark.ml.linalg import Vectors, VectorUDT
 from pyspark.ml.classification import MultilayerPerceptronClassifier
@@ -30,6 +23,7 @@ from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.ml.feature import VectorAssembler
 import re
 import pandas as pd
+
 
 
 def prepare():
@@ -64,51 +58,71 @@ def prepare():
 if __name__ == '__main__':
 	spark = prepare()
 	df_standard = load_standard_prod(spark)
-	# df_interfere = load_interfere_mapping(spark)
+	df_interfere = load_interfere_mapping(spark)
 
-	# modify_pool_cleanning_prod(spark)
-	# df_cleanning = load_stream_cleanning_prod(spark)
-	# df_cleanning = dosage_standify(df_cleanning)
-	# df_cleanning = df_cleanning.withColumn("SPEC", transfer_unit_pandas_udf(df_cleanning.SPEC))
-	df_standard.show(10)
-	df_standard = df_standard.withColumn("SPEC_STANDARD", transfer_unit_pandas_udf(df_standard.SPEC_STANDARD))
-	df_standard.show()
+	# 1. human interfere 与 数据准备
+	modify_pool_cleanning_prod(spark)  # 更高的并发数
+	df_cleanning = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/splitdata")
+	df_cleanning = df_cleanning.repartition(1600)
+	df_cleanning = human_interfere(spark, df_cleanning, df_interfere)
+	df_cleanning = dosage_standify(df_cleanning)  # 剂型列规范
+	df_cleanning = spec_standify(df_cleanning)  # 规格列规范
 
-	# 1. human interfere
-	# df_cleanning = human_interfere(spark, df_cleanning, df_interfere)
+	df_standard = df_standard.withColumn("SPEC", df_standard.SPEC_STANDARD)
+	df_standard = spec_standify(df_standard)
+	df_standard = df_standard.withColumn("SPEC_STANDARD", df_standard.SPEC).drop("SPEC")
 
 	# 2. cross join
-	# df_result = df_cleanning.crossJoin(broadcast(df_standard)).na.fill("")
-	# df_result = dosage_standify(df_result)
+	df_result = df_cleanning.crossJoin(broadcast(df_standard)).na.fill("")
 
-	# edit_distance
-	# df_result = df_result.withColumn("MOLE_NAME_ED", edit_distance_pandas_udf(df_result.MOLE_NAME, df_result.MOLE_NAME_STANDARD))
-	# df_result = df_result.withColumn("PRODUCT_NAME_ED", edit_distance_with_contains_pandas_udf(df_result.PRODUCT_NAME, df_result.PRODUCT_NAME_STANDARD))
-	# df_result = df_result.withColumn("DOSAGE_ED", edit_distance_with_contains_pandas_udf(df_result.DOSAGE, df_result.DOSAGE_STANDARD))
-	# df_result = df_result.withColumn("SPEC_ED", edit_distance_with_contains_pandas_udf(df_result.SPEC, df_result.SPEC_STANDARD))
-	# df_result = df_result.withColumn("PACK_QTY_ED", edit_distance_with_float_change_pandas_udf(df_result.PACK_QTY, df_result.PACK_QTY_STANDARD))
-	# df_result = df_result.withColumn("MANUFACTURER_NAME_CH_ED", edit_distance_with_contains_pandas_udf(df_result.MANUFACTURER_NAME, df_result.MANUFACTURER_NAME_STANDARD))
-	# df_result = df_result.withColumn("MANUFACTURER_NAME_EN_ED", edit_distance_with_contains_pandas_udf(df_result.MANUFACTURER_NAME, df_result.MANUFACTURER_NAME_EN_STANDARD))
-	# df_result = df_result.withColumn("MANUFACTURER_NAME_ED", \
-	# 				when(df_result.MANUFACTURER_NAME_CH_ED < df_result.MANUFACTURER_NAME_EN_ED, df_result.MANUFACTURER_NAME_CH_ED) \
-	# 				.otherwise(df_result.MANUFACTURER_NAME_EN_ED))
+	# 3. jaccard distance
+	# 得到一个list，里面是mole_name 和 doasge 的 jd 数值
+	df_result = df_result.withColumn("JACCARD_DISTANCE", \
+				efftiveness_with_jaccard_distance( \
+					df_result.MOLE_NAME, df_result.MOLE_NAME_STANDARD, \
+					df_result.DOSAGE, df_result.DOSAGE_STANDARD \
+					))
 
-	# # features
-	# assembler = VectorAssembler( \
-	# 				inputCols=["MOLE_NAME_ED", "PRODUCT_NAME_ED", "DOSAGE_ED", "SPEC_ED", "PACK_QTY_ED", "MANUFACTURER_NAME_ED"], \
-	# 				outputCol="features")
-	# df_result = assembler.transform(df_result)
+	# 4. cutting for reduce the calculation
+	# df_result = df_result.where((df_result.JACCARD_DISTANCE[0] < 0.6) & (df_result.JACCARD_DISTANCE[1] < 0.9))
+	df_result = df_result.where((df_result.JACCARD_DISTANCE[0] < 0.6))  # 目前只取了分子名来判断
 
-	# df_result = df_result.withColumn("PACK_ID_CHECK_NUM", df_result.PACK_ID_CHECK.cast("int")).na.fill({"PACK_ID_CHECK_NUM": -1})
-	# df_result = df_result.withColumn("PACK_ID_STANDARD_NUM", df_result.PACK_ID_STANDARD.cast("int")).na.fill({"PACK_ID_STANDARD_NUM": -1})
-	# df_result = df_result.withColumn("label",
-	# 				when((df_result.PACK_ID_CHECK_NUM > 0) & (df_result.PACK_ID_STANDARD_NUM > 0) & (df_result.PACK_ID_CHECK_NUM == df_result.PACK_ID_STANDARD_NUM), 1.0).otherwise(0.0))
 
-	# 3. save the steam
-	# query = df_result.writeStream \
-	# 			.format("parquet") \
-	# 			.option("checkpointLocation", "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/crossJoin2/checkpoint") \
-	# 			.option("path", "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/crossJoin2/data") \
-	# 			.start()
+	# 5. edit_distance is not very good for normalization probloms
+	# we use jaro_winkler_similarity instead
+	# if not good enough, change back to edit distance
+	df_result = df_result.withColumn("EFFTIVENESS", \
+					efftiveness_with_jaro_winkler_similarity( \
+						df_result.MOLE_NAME, df_result.MOLE_NAME_STANDARD, \
+						df_result.PRODUCT_NAME, df_result.PRODUCT_NAME_STANDARD, \
+						df_result.DOSAGE, df_result.DOSAGE_STANDARD, \
+						df_result.SPEC, df_result.SPEC_STANDARD, \
+						df_result.PACK_QTY, df_result.PACK_QTY_STANDARD, \
+						df_result.MANUFACTURER_NAME, df_result.MANUFACTURER_NAME_STANDARD, df_result.MANUFACTURER_NAME_EN_STANDARD \
+						))
 
-	# query.awaitTermination()
+	df_result = df_result.withColumn("EFFTIVENESS_MOLE_NAME", df_result.EFFTIVENESS[0]) \
+					.withColumn("EFFTIVENESS_PRODUCT_NAME", df_result.EFFTIVENESS[1]) \
+					.withColumn("EFFTIVENESS_DOSAGE", df_result.EFFTIVENESS[2]) \
+					.withColumn("EFFTIVENESS_SPEC", df_result.EFFTIVENESS[3]) \
+					.withColumn("EFFTIVENESS_PACK_QTY", df_result.EFFTIVENESS[4]) \
+					.withColumn("EFFTIVENESS_MANUFACTURER", df_result.EFFTIVENESS[5]) \
+					.drop("EFFTIVENESS")
+
+	# df_result.show()
+
+	# features
+	assembler = VectorAssembler( \  # 将多列数据转化为单列的向量列
+					inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_SPEC", \
+								"EFFTIVENESS_PACK_QTY", "EFFTIVENESS_MANUFACTURER"], \
+					outputCol="features")
+	df_result = assembler.transform(df_result)
+
+	df_result = df_result.withColumn("PACK_ID_CHECK_NUM", df_result.PACK_ID_CHECK.cast("int")).na.fill({"PACK_ID_CHECK_NUM": -1})
+	df_result = df_result.withColumn("PACK_ID_STANDARD_NUM", df_result.PACK_ID_STANDARD.cast("int")).na.fill({"PACK_ID_STANDARD_NUM": -1})
+	df_result = df_result.withColumn("label",
+					when((df_result.PACK_ID_CHECK_NUM > 0) & (df_result.PACK_ID_STANDARD_NUM > 0) & (df_result.PACK_ID_CHECK_NUM == df_result.PACK_ID_STANDARD_NUM), 1.0).otherwise(0.0)) \
+					.drop("PACK_ID_CHECK_NUM", "PACK_ID_STANDARD_NUM")
+
+	df_result.repartition(10).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data3")
+  
