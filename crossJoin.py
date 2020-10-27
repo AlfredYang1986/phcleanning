@@ -125,3 +125,4 @@ if __name__ == '__main__':
 					.drop("PACK_ID_CHECK_NUM", "PACK_ID_STANDARD_NUM")
 
 	df_result.repartition(10).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data3")
+  
