@@ -13,9 +13,6 @@ import os
 from pyspark.sql import SparkSession
 from dataparepare import *
 from interfere import *
-from feature import *
-# from similarity import *
-# from oldsimi import *
 from pyspark.sql.types import *
 from pyspark.sql.functions import desc
 from pyspark.sql.functions import rank
@@ -34,7 +31,7 @@ def prepare():
 		.appName("CPA&GYC match refactor") \
 		.config("spark.driver.memory", "1g") \
 		.config("spark.executor.cores", "2") \
-		.config("spark.executor.instance", "4") \
+		.config("spark.executor.instances", "4") \
 		.config("spark.executor.memory", "2g") \
 		.config('spark.sql.codegen.wholeStage', False) \
 		.getOrCreate()
@@ -52,57 +49,34 @@ def prepare():
 	return spark
 
 
-@udf(returnType=IntegerType())
-def check_similarity(packid_check, packid_standard):
-	if (packid_check == "") & (packid_standard == ""):
-		return 1
-	elif len(packid_check) == 0:
-		return 0
-	elif len(packid_standard) == 0:
-		return 0
-	else:
-		try:
-			if int(packid_check) == int(packid_standard):
-				return 1
-			else:
-				return 0
-		except ValueError:
-			return 0
-
 
 if __name__ == '__main__':
 	spark = prepare()
-	df_standard = load_standard_prod(spark)
-	df_cleanning = load_cleanning_prod(spark)
-	df_cleanning = df_cleanning.limit(100)
-	df_interfere = load_interfere_mapping(spark)
 
-	# 1. human interfere
-	df_cleanning = human_interfere(spark, df_cleanning, df_interfere)
-	df_cleanning.persist()
+	# 1. load the data
+	df_result = load_training_data(spark)
+	df_validate = df_result #.select("id", "label", "features").orderBy("id")
 
-	# 2. cross join
-	df_result = feature_cal(spark, df_cleanning, df_standard)
-	df_result.persist()
-
-	vec_udf = udf(lambda vs: Vectors.dense(vs), VectorUDT())
-	similarity_udf = udf(lambda vs: 0.1 * vs[2] + 0.1 * vs[3] + 0.5 * vs[4] + 0.1 * vs[0] + 0.1 * vs[1] + 0.1 * vs[5], DoubleType())
-	df_result = df_result.withColumn("similarity", similarity_udf(df_result.featureCol))
-	df_result = df_result.where(df_result.similarity > 0.7)
-	df_result = df_result.withColumn("features", vec_udf(df_result.featureCol)) \
-					.withColumn("label", check_similarity(df_result.PACK_ID_CHECK, df_result.PACK_ID_STANDARD))
-	df_result.persist()
-
-	df_validate = df_result.select("id", "label", "features").orderBy("id")
-	# 3. 对每个需要匹配的值做猜想排序
-	df_validate.show()
-
-	# 4. load model
+	# 2. load model
 	model = MultilayerPerceptronClassificationModel.load("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/model")
 
-	# compute accuracy on the test set
+	# 3. compute accuracy on the test set
 	result = model.transform(df_validate)
+	result.persist()
 	predictionAndLabels = result.select("id", "prediction", "label").orderBy("id")
-	predictionAndLabels.show()
 	evaluator = MulticlassClassificationEvaluator(metricName="accuracy")
 	print("Test set accuracy = " + str(evaluator.evaluate(predictionAndLabels)))
+
+	# 4. Test with Pharbers defined methods
+	result = result.withColumn("JACCARD_DISTANCE_MOLE_NAME", result.JACCARD_DISTANCE[0]) \
+				.withColumn("JACCARD_DISTANCE_DOSAGE", result.JACCARD_DISTANCE[1]) \
+				.drop("JACCARD_DISTANCE", "features").drop("rawPrediction", "probability")
+	result.printSchema()
+	result.orderBy("id").repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/result")
+	df_ph = result.where((result.prediction == 1.0) | (result.label == 1.0))
+	ph_total = result.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
+	print(ph_total)
+	ph_positive_hit = result.where((result.prediction == result.label) & (result.label == 1.0)).count()
+	print(ph_positive_hit)
+	# ph_negetive_hit = result.where(result.prediction != result.label).count()
+	print("Pharbers Test set accuracy = " + str(ph_positive_hit / ph_total))
