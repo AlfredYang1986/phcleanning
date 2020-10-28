@@ -374,10 +374,14 @@ def spec_standify(df):
 
 
 def similarity(df):
-	df = df.withColumn("SIMILARITY", df.EFFTIVENESS_MOLE_NAME + df.EFFTIVENESS_PRODUCT_NAME + df.EFFTIVENESS_DOSAGE \
-						+ df.EFFTIVENESS_SPEC + df.EFFTIVENESS_PACK_QTY + df.EFFTIVENESS_MANUFACTURER)
+	df = df.withColumn("SIMILARITY", \
+					when(df.PRODUCT_NAME.contains(df.MOLE_NAME) | df.MOLE_NAME.contains(df.PRODUCT_NAME), \
+						1.2*df.EFFTIVENESS_MOLE_NAME + 1.2*df.EFFTIVENESS_DOSAGE \
+						+ 1.2*df.EFFTIVENESS_SPEC + 1.2*df.EFFTIVENESS_PACK_QTY + 1.2*df.EFFTIVENESS_MANUFACTURER) \
+					.otherwise(df.EFFTIVENESS_MOLE_NAME + df.EFFTIVENESS_PRODUCT_NAME + df.EFFTIVENESS_DOSAGE \
+						+ df.EFFTIVENESS_SPEC + df.EFFTIVENESS_PACK_QTY + df.EFFTIVENESS_MANUFACTURER))
 
-	windowSpec  = Window.partitionBy("id").orderBy(desc("SIMILARITY"))
+	windowSpec = Window.partitionBy("id").orderBy(desc("SIMILARITY"))
 
 	df = df.withColumn("RANK", rank().over(windowSpec))
 	df = df.where((df.RANK <= 5) | (df.label == 1.0))

@@ -18,9 +18,10 @@ from pyspark.sql.types import *
 
 
 
-raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/azsanofi_check"
-split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/0.0.1/splitdata"
-training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/0.0.1/tmp/data3"
+# raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/azsanofi_check"
+raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/raw_data"
+split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.1/splitdata"
+training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.1/tmp/data3"
 
 
 """

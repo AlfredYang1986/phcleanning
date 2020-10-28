@@ -25,8 +25,8 @@ import re
 import pandas as pd
 
 
-split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/0.0.1/splitdata"
-result_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/0.0.1/tmp/data3"
+split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.1/splitdata"
+result_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.1/tmp/data3"
 
 
 def prepare():
