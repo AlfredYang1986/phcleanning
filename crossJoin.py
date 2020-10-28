@@ -25,6 +25,9 @@ import re
 import pandas as pd
 
 
+split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/0.0.1/splitdata"
+result_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/0.0.1/tmp/data3"
+
 
 def prepare():
 	os.environ["PYSPARK_PYTHON"] = "python3"
@@ -62,7 +65,7 @@ if __name__ == '__main__':
 
 	# 1. human interfere 与 数据准备
 	modify_pool_cleanning_prod(spark)  # 更高的并发数
-	df_cleanning = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/splitdata")
+	df_cleanning = spark.read.parquet(split_data_path)
 	df_cleanning = df_cleanning.repartition(1600)
 	df_cleanning = human_interfere(spark, df_cleanning, df_interfere)
 	df_cleanning = dosage_standify(df_cleanning)  # 剂型列规范
@@ -112,7 +115,7 @@ if __name__ == '__main__':
 	# df_result.show()
 
 	# features
-	assembler = VectorAssembler( \  # 将多列数据转化为单列的向量列
+	assembler = VectorAssembler( \
 					inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_SPEC", \
 								"EFFTIVENESS_PACK_QTY", "EFFTIVENESS_MANUFACTURER"], \
 					outputCol="features")
@@ -124,4 +127,4 @@ if __name__ == '__main__':
 					when((df_result.PACK_ID_CHECK_NUM > 0) & (df_result.PACK_ID_STANDARD_NUM > 0) & (df_result.PACK_ID_CHECK_NUM == df_result.PACK_ID_STANDARD_NUM), 1.0).otherwise(0.0)) \
 					.drop("PACK_ID_CHECK_NUM", "PACK_ID_STANDARD_NUM")
 
-	df_result.repartition(10).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data3")
+	df_result.repartition(10).write.mode("overwrite").parquet(result_path)

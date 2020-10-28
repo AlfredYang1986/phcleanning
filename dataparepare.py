@@ -17,6 +17,12 @@ from pyspark.sql.functions import lit
 from pyspark.sql.types import *
 
 
+
+raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/azsanofi_check"
+split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/0.0.1/splitdata"
+training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/0.0.1/tmp/data3"
+
+
 """
 读取标准表
 """
@@ -55,7 +61,7 @@ def load_standard_prod(spark):
 """
 def load_cleanning_prod(spark):
      # df_cleanning = spark.read.parquet("s3a://ph-stream/common/public/pfizer_check").drop("version")
-     df_cleanning = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/azsanofi_check/0.0.12/raw_data").drop("version")
+     df_cleanning = spark.read.parquet(raw_data_path).drop("version")
 
      # 为了验证算法，保证id尽可能可读性，投入使用后需要删除
      df_cleanning = df_cleanning.repartition(1).withColumn("id", monotonically_increasing_id())
@@ -72,7 +78,7 @@ def load_cleanning_prod(spark):
 """
 def modify_pool_cleanning_prod(spark):
      # df_cleanning = spark.read.parquet("s3a://ph-stream/common/public/pfizer_check").drop("version")
-     df_cleanning = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/azsanofi_check")
+     df_cleanning = spark.read.parquet(raw_data_path)
 
      # 为了验证算法，保证id尽可能可读性，投入使用后需要删除
      df_cleanning = df_cleanning.repartition(1).withColumn("id", monotonically_increasing_id())
@@ -81,7 +87,7 @@ def modify_pool_cleanning_prod(spark):
      df_cleanning.show()
 
      # 为了算法更高的并发，在这里将文件拆分为16个，然后以16的并发数开始跑人工智能
-     df_cleanning.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/splitdata")
+     df_cleanning.write.mode("overwrite").parquet(split_data_path)
      # return df_cleanning
 
 
@@ -101,7 +107,7 @@ def load_stream_cleanning_prod(spark):
 			StructField("MANUFACTURER_NAME", StringType())
 		])
 
-	df_cleanning = spark.readStream.schema(schema).parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/splitdata")
+	df_cleanning = spark.readStream.schema(schema).parquet(split_data_path)
 	return df_cleanning
 
 
@@ -135,7 +141,7 @@ def load_interfere_mapping(spark):
 """
 def load_training_data(spark):
      # return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data2") # pifer
-     return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data3") # az
+     return spark.read.parquet(training_data_path) # az
 
 
 """
