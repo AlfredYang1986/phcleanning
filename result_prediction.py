@@ -43,9 +43,9 @@ def prepare():
 
 	return spark
 
-error_match_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.2/result_analyse/error_match"
-no_label_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.2/result_analyse/no_label"
-accuracy_by_mole_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.2/result_analyse/accuracy_by_mole_path"
+error_match_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.3/result_analyse/error_match"
+no_label_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.3/result_analyse/no_label"
+accuracy_by_mole_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.3/result_analyse/accuracy_by_mole_path"
 
 if __name__ == '__main__':
 	spark = prepare()
@@ -58,14 +58,24 @@ if __name__ == '__main__':
 	print(rank1)
 	
 	# 0. check the result
-	print("算法生成的similarity前五总数 = " + str(df_result.count()))
+	print("算法生成总数 = " + str(df_result.count()))
 	
 	# 1. count the total number of data
 	total_count = df_result.groupBy("id").agg({"SIMILARITY": "first"}).count()
 	print("数据总数 = " + str(total_count))
 	
 	# 2. 第一匹配similarity >= 5.8：
-	df_result = df_result.withColumn("match_right_1", when((df_result.SIMILARITY >= 5.8) & (df_result.RANK == 1), 1.0).otherwise(0.0))
+	df_result = df_result.withColumn("match_right_1", when(((df_result.SIMILARITY >= 5.6) & (df_result.EFFTIVENESS_MOLE_NAME >= 0.9) \
+															& (df_result.EFFTIVENESS_PACK_QTY >= 0.8) & (df_result.RANK == 1)) \
+															| ((df_result.SIMILARITY >= 4) & (df_result.RANK == 1)\
+																& (df_result.EFFTIVENESS_PRODUCT_NAME == 0.0) & (df_result.EFFTIVENESS_SPEC >= 0.7) \
+																& (df_result.EFFTIVENESS_PACK_QTY >= 0.7) & (df_result.EFFTIVENESS_DOSAGE >= 0.7)\
+															) \
+															| ((df_result.SIMILARITY >= 4) & (df_result.RANK == 1)\
+																& (df_result.EFFTIVENESS_DOSAGE == 0.0) & (df_result.EFFTIVENESS_PRODUCT_NAME >= 0.8) & (df_result.EFFTIVENESS_SPEC >= 0.7) \
+																& (df_result.EFFTIVENESS_PACK_QTY >= 0.7) & (df_result.EFFTIVENESS_DOSAGE >= 0.7)) \
+															, 1.0) \
+													.otherwise(0.0))
 	machine_right_1_count = df_result.where(df_result.match_right_1 == 1.0).count()
 	print("机器判断第一正确匹配数量 = " + str(machine_right_1_count))
 	actual_right_1_count = df_result.where((df_result.match_right_1 == 1.0) & (df_result.label == 1.0)).count()
@@ -83,11 +93,11 @@ if __name__ == '__main__':
 	print("判断正确匹配率 = " + str(actual_cannot_match_count / cannot_match_count))
 	
 	# 4. 模糊区域 4 <= similarity <= 5.8：
-	df_result = df_result.withColumn("appro_match", when((df_result.SIMILARITY > 4) & (df_result.SIMILARITY < 5.8) & (df_result.RANK == 1), 1.0).otherwise(0.0))
-	df_result = df_result.withColumn("appro_match_2", when((df_result.SIMILARITY > 4) & (df_result.SIMILARITY < 5.8) & (df_result.RANK == 2), 1.0).otherwise(0.0))
-	df_result = df_result.withColumn("appro_match_3", when((df_result.SIMILARITY > 4) & (df_result.SIMILARITY < 5.8) & (df_result.RANK == 3), 1.0).otherwise(0.0))
-	df_result = df_result.withColumn("appro_match_4", when((df_result.SIMILARITY > 4) & (df_result.SIMILARITY < 5.8) & (df_result.RANK == 4), 1.0).otherwise(0.0))
-	df_result = df_result.withColumn("appro_match_5", when((df_result.SIMILARITY > 4) & (df_result.SIMILARITY < 5.8) & (df_result.RANK == 5), 1.0).otherwise(0.0))
+	df_result = df_result.withColumn("appro_match", when((df_result.match_right_1 == 0.0) & (df_result.cannot_match == 0.0) & (df_result.RANK == 1), 1.0).otherwise(0.0))
+	df_result = df_result.withColumn("appro_match_2", when((df_result.match_right_1 == 0.0) & (df_result.cannot_match == 0.0) & (df_result.RANK == 2), 1.0).otherwise(0.0))
+	df_result = df_result.withColumn("appro_match_3", when((df_result.match_right_1 == 0.0) & (df_result.cannot_match == 0.0) & (df_result.RANK == 3), 1.0).otherwise(0.0))
+	df_result = df_result.withColumn("appro_match_4", when((df_result.match_right_1 == 0.0) & (df_result.cannot_match == 0.0) & (df_result.RANK == 4), 1.0).otherwise(0.0))
+	df_result = df_result.withColumn("appro_match_5", when((df_result.match_right_1 == 0.0) & (df_result.cannot_match == 0.0) & (df_result.RANK == 5), 1.0).otherwise(0.0))
 	
 	appro_match_count = df_result.where(df_result.appro_match == 1.0).count()
 	print()
@@ -116,8 +126,6 @@ if __name__ == '__main__':
 	df_result = hit_place_prediction(df_result, 5)
 	positive_hit_5 = df_result.where((df_result.appro_match_5 == 1.0) & (df_result.prediction_5 == df_result.label) & (df_result.label == 1.0)).count()
 	print("第五正确匹配pack id 数量 = " + str(positive_hit_5))
-	xixi1=df_result.toPandas()
-	xixi1.to_excel('Pfizer_PFZ10_outlier.xlsx', index = False)
 	
 	
 
