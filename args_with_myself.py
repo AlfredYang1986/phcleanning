@@ -44,9 +44,9 @@ def prepare():
 
 	return spark
 
-error_match_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.2/result_analyse/error_match"
-no_label_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.2/result_analyse/no_label"
-accuracy_by_mole_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.3/result_analyse/accuracy_by_mole_path"
+error_match_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.1/result_analyse/error_match"
+no_label_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.1/result_analyse/no_label"
+accuracy_by_mole_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.1/result_analyse/accuracy_by_mole_path"
 
 if __name__ == '__main__':
 	spark = prepare()
@@ -98,6 +98,7 @@ if __name__ == '__main__':
 	# 3. not_match label & record the validata dataaa
 	# df_result.printSchema()
 	df_result = df_result.withColumn("prediction", df_result.prediction_1 + df_result.prediction_2 + df_result.prediction_3 + df_result.prediction_4 + df_result.prediction_5)
+	df_result.show(3)
 	df_mole = df_result
 	df_no_label = df_result.groupBy("id")\
 			.agg(sum(df_result.label).alias("label"),\
@@ -116,8 +117,6 @@ if __name__ == '__main__':
 	# df_result.orderBy("id", "RANK").repartition(1).write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/validate/error_match")
 	df_result.orderBy("id", "RANK").repartition(1).write.format("parquet").mode("overwrite").option("header", "true").save(error_match_path)
 	
-	df_result.orderBy("id", "RANK").repartition(1).write.format("parquet").mode("overwrite").option("header", "true").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/validate/error_match/error_match_par")
-
 	# 3.2 本身就没有pack id的数据，也可能是我在第一步通过简单算法而过滤掉的数据
 	# 本身没有packid 或者匹配出的packid不能为整数 或者机器匹配的packid ！= 人工匹配的packid
 	df_no_label = df_no_label.where(df_no_label.label == 0.0)

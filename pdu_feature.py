@@ -381,7 +381,7 @@ def similarity(df):
 					.otherwise(df.EFFTIVENESS_MOLE_NAME + df.EFFTIVENESS_PRODUCT_NAME + df.EFFTIVENESS_DOSAGE \
 						+ df.EFFTIVENESS_SPEC + df.EFFTIVENESS_PACK_QTY + df.EFFTIVENESS_MANUFACTURER))
 
-	windowSpec = Window.partitionBy("id").orderBy(desc("SIMILARITY"))
+	windowSpec = Window.partitionBy("id").orderBy(desc("SIMILARITY"), desc("EFFTIVENESS_MOLE_NAME"), desc("EFFTIVENESS_DOSAGE"), desc("PACK_ID_STANDARD"))
 
 	df = df.withColumn("RANK", rank().over(windowSpec))
 	df = df.where((df.RANK <= 5) | (df.label == 1.0))
