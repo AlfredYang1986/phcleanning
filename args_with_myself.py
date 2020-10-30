@@ -44,9 +44,9 @@ def prepare():
 
 	return spark
 
-error_match_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.3/result_analyse/error_match"
-no_label_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.3/result_analyse/no_label"
-accuracy_by_mole_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.3/result_analyse/accuracy_by_mole_path"
+error_match_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.3/result_analyse/error_match"
+no_label_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.3/result_analyse/no_label"
+accuracy_by_mole_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.3/result_analyse/accuracy_by_mole_path"
 raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/raw_data"
 
 
@@ -61,22 +61,20 @@ if __name__ == '__main__':
 	total_hit = df_result.where(df_result.label == 1.0).count()
 	print("正确数据总数 = " + str(total_hit))
 
-	# 1. count the total number of data
+	# 1.1 count the total number of data
 	total_count = df_result.groupBy("id").agg({"label": "first"}).count()
 	print("数据总数 = " + str(total_count))
-	df_result.show(3)
 	
 	raw_data = spark.read.parquet(raw_data_path)
 	print("原始数据总数 = " + str(raw_data.count()))
-	# raw_data.show(3)
 	
-	# data_analyse = raw_data.join(df_result, "PACK_ID_CHECK", how="left")
-	# data_analyse.show(5)
-	# count = data_analyse.where(data_analyse.id.isNull())
-	# count = count.join(df_prod)
-	# # print(count)
-	# xixi1=count.toPandas()
-	# xixi1.to_excel('Pfizer_PFZ10_outlier.xlsx', index = False)
+	# 1.2 整理第一步筛选就丢失了的数据
+	data_analyse = raw_data.join(df_result, "PACK_ID_CHECK", how="left")
+	lost_data = data_analyse.where(data_analyse.id.isNull())
+	print("丢失数据 = " + str(lost_data.count()))
+	df_prod = load_standard_prod(spark)
+	lost_data = lost_data.join(df_prod, df_prod.PACK_ID_STANDARD.cast("int") == lost_data.PACK_ID_CHECK.cast("int"), how="left")
+	print(lost_data.count())
 
 	# 2. count the right hit number
 	# 2.1 first hit
@@ -160,7 +158,6 @@ if __name__ == '__main__':
 			(df_mole.prediction_1 + df_mole.prediction_2 + df_mole.prediction_3 + df_mole.prediction_4 + df_mole.prediction_5) / df_mole.label)
 	
 	
-	df_mole.show()
 	df_mole = df_mole.withColumn("prediction_accuracy_1", df_mole.prediction_1 / df_mole.label) \
 						.withColumn("prediction_accuracy_2", df_mole.prediction_2 / df_mole.label) \
 						.withColumn("prediction_accuracy_3", df_mole.prediction_3 / df_mole.label) \
@@ -171,6 +168,5 @@ if __name__ == '__main__':
 			(df_mole.prediction_1 + df_mole.prediction_2 + df_mole.prediction_3 + df_mole.prediction_4 + df_mole.prediction_5) / df_mole.label)
 	
 	
-	df_mole.show()
 	df_mole.repartition(1).write.format("parquet").mode("overwrite").save(accuracy_by_mole_path)
 
