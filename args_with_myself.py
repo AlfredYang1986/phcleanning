@@ -44,9 +44,11 @@ def prepare():
 
 	return spark
 
-error_match_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.1/result_analyse/error_match"
-no_label_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.1/result_analyse/no_label"
-accuracy_by_mole_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.1/result_analyse/accuracy_by_mole_path"
+error_match_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.3/result_analyse/error_match"
+no_label_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.3/result_analyse/no_label"
+accuracy_by_mole_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.3/result_analyse/accuracy_by_mole_path"
+raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/raw_data"
+
 
 if __name__ == '__main__':
 	spark = prepare()
@@ -62,6 +64,19 @@ if __name__ == '__main__':
 	# 1. count the total number of data
 	total_count = df_result.groupBy("id").agg({"label": "first"}).count()
 	print("数据总数 = " + str(total_count))
+	df_result.show(3)
+	
+	raw_data = spark.read.parquet(raw_data_path)
+	print("原始数据总数 = " + str(raw_data.count()))
+	# raw_data.show(3)
+	
+	# data_analyse = raw_data.join(df_result, "PACK_ID_CHECK", how="left")
+	# data_analyse.show(5)
+	# count = data_analyse.where(data_analyse.id.isNull())
+	# count = count.join(df_prod)
+	# # print(count)
+	# xixi1=count.toPandas()
+	# xixi1.to_excel('Pfizer_PFZ10_outlier.xlsx', index = False)
 
 	# 2. count the right hit number
 	# 2.1 first hit

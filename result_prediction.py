@@ -72,8 +72,8 @@ if __name__ == '__main__':
 																& (df_result.EFFTIVENESS_PACK_QTY >= 0.7) & (df_result.EFFTIVENESS_DOSAGE >= 0.7)\
 															) \
 															| ((df_result.SIMILARITY >= 4) & (df_result.RANK == 1)\
-																& (df_result.EFFTIVENESS_DOSAGE == 0.0) & (df_result.EFFTIVENESS_PRODUCT_NAME >= 0.8) & (df_result.EFFTIVENESS_SPEC >= 0.7) \
-																& (df_result.EFFTIVENESS_PACK_QTY >= 0.7) & (df_result.EFFTIVENESS_DOSAGE >= 0.7)) \
+																& (df_result.EFFTIVENESS_DOSAGE == 0.0) & (df_result.EFFTIVENESS_PRODUCT_NAME >= 0.8)\
+																& (df_result.EFFTIVENESS_PACK_QTY >= 0.7)  & (df_result.EFFTIVENESS_SPEC >= 0.7)) \
 															, 1.0) \
 													.otherwise(0.0))
 	machine_right_1_count = df_result.where(df_result.match_right_1 == 1.0).count()
