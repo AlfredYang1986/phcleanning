@@ -25,9 +25,9 @@ import re
 import pandas as pd
 
 
-split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.3/splitdata"
-training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.2/tmp/data3"
-result_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.2/tmp/data3"
+split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.4/splitdata"
+training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.4/tmp/data3"
+result_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.4/tmp/data3"
 
 
 def prepare():
@@ -63,19 +63,21 @@ if __name__ == '__main__':
 	spark = prepare()
 	df_standard = load_standard_prod(spark)
 	df_interfere = load_interfere_mapping(spark)
+	df_dosage_mapping = load_dosage_mapping(spark)
 
 	# 1. human interfere 与 数据准备
 	modify_pool_cleanning_prod(spark)  # 更高的并发数
 	df_cleanning = spark.read.parquet(split_data_path)
 	df_cleanning = df_cleanning.repartition(1600)
 	df_cleanning = human_interfere(spark, df_cleanning, df_interfere)
-	df_cleanning = dosage_standify(df_cleanning)  # 剂型列规范
+	# df_cleanning = dosage_standify(df_cleanning)  # 剂型列规范
 	df_cleanning = spec_standify(df_cleanning)  # 规格列规范
 
 	df_standard = df_standard.withColumn("SPEC", df_standard.SPEC_STANDARD)
 	df_standard = spec_standify(df_standard)
 	df_standard = df_standard.withColumn("SPEC_STANDARD", df_standard.SPEC).drop("SPEC")
-
+	df_cleanning = dosage_standify(df_cleanning, df_dosage_mapping)  # 剂型列规范
+	
 	# 2. cross join
 	df_result = df_cleanning.crossJoin(broadcast(df_standard)).na.fill("")
 
