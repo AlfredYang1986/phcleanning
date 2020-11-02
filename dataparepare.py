@@ -19,13 +19,13 @@ from pyspark.sql.types import *
 
 
 # raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/azsanofi_check"
-# raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/raw_data"
-# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.1/splitdata"
-# training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.1/tmp/data3"
+raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/raw_data"
+split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.4/splitdata"
+training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.4/tmp/data3"
 
-raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/raw_data"
-split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.2/splitdata"
-training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.2/tmp/data3"
+# raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/raw_data"
+# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.2/splitdata"
+# training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.2/tmp/data3"
 
 
 """
@@ -88,7 +88,7 @@ def modify_pool_cleanning_prod(spark):
      # 为了验证算法，保证id尽可能可读性，投入使用后需要删除
      df_cleanning = df_cleanning.repartition(1).withColumn("id", monotonically_increasing_id())
      #df_cleanning = df_cleanning.readStream.withColumn("id", monotonically_increasing_id())
-     print(df_cleanning.count())
+     print("源数据条目： "+ str(df_cleanning.count()))
      df_cleanning.show()
 
      # 为了算法更高的并发，在这里将文件拆分为16个，然后以16的并发数开始跑人工智能
@@ -139,6 +139,13 @@ def load_interfere_mapping(spark):
                          .withColumnRenamed("PACK_ID", "PACK_ID_INTERFERE")
 
      return df_interfere
+
+"""
+读取剂型替换表
+"""
+def load_dosage_mapping(spark):
+	df_dosage_mapping = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/cpa_dosage_mapping")
+	return df_dosage_mapping
 
 
 """
