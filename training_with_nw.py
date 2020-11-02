@@ -52,14 +52,21 @@ def prepare():
 if __name__ == '__main__':
 	spark = prepare()
 
+	# 0. load the cleanning data
+	df_cleanning = load_training_data(spark).select("id").distinct()
+	# Split the data into training and test sets (30% held out for testing)
+	(df_training, df_test) = df_cleanning.randomSplit([0.7, 0.3])
+
 	# 1. load the training data
 	df_result = load_training_data(spark)
-	df_training = df_result.select("id", "label", "features").orderBy("id")
+	# df_training = df_result.select("id", "label", "features").orderBy("id")
+	# 1.1 构建训练集合
+	df_training = df_training.join(df_result, how="left", on="id")
+	df_training.show()
 
-	# 2. Split the data into train and test
-	splits = df_training.randomSplit([0.6, 0.4], 1234)
-	train = splits[0]
-	test = splits[1]
+	# 1.2 构建测试集合
+	df_test = df_test.join(df_result, how="left", on="id")
+	df_test.show()
 
 	# 3. specify layers for the neural network:
 	# input layer of size 6 (features)
@@ -70,13 +77,13 @@ if __name__ == '__main__':
 	trainer = MultilayerPerceptronClassifier(maxIter=100, layers=layers, blockSize=128, seed=1234)
 
 	# 5. train the model
-	model = trainer.fit(train)
+	model = trainer.fit(df_training)
 
 	# 6. save the model
 	model.write().save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/nw")
 
 	# 7. compute accuracy on the test set
-	result = model.transform(test)
+	result = model.transform(df_test)
 	predictionAndLabels = result.select("id", "prediction", "label").orderBy("id")
 	evaluator = MulticlassClassificationEvaluator(metricName="accuracy")
 	print("Test set accuracy = " + str(evaluator.evaluate(predictionAndLabels)))

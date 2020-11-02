@@ -18,10 +18,9 @@ from pyspark.sql.functions import desc
 from pyspark.sql.functions import rank
 from pyspark.sql import Window
 from pyspark.ml.linalg import Vectors, VectorUDT
-from pyspark.ml.classification import MultilayerPerceptronClassifier
 from pyspark.ml import Pipeline
 from pyspark.ml.classification import RandomForestClassifier
-from pyspark.ml.feature import IndexToString, StringIndexer, VectorIndexer
+from pyspark.ml.feature import StringIndexer, VectorIndexer
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 
 
@@ -55,44 +54,49 @@ def prepare():
 if __name__ == '__main__':
 	spark = prepare()
 
-	# 1. load the training data
-	df_result = load_training_data(spark)
-	data_training = df_result.select("id", "label", "features").orderBy("id")
-
-	# 2. Split the data into train and test
-	labelIndexer = StringIndexer(inputCol="label", outputCol="indexedLabel").fit(data_training)
-
-	# 3. specify layers for the neural network:
-	featureIndexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=6).fit(data_training)
-
-	# 4. create the trainer and set its parameters
+	# 0. load the cleanning data
+	df_cleanning = load_training_data(spark).select("id").distinct()
 	# Split the data into training and test sets (30% held out for testing)
-	(trainingData, testData) = data_training.randomSplit([0.7, 0.3])
+	(df_training, df_test) = df_cleanning.randomSplit([0.7, 0.3])
+
+	# 1. load the training data
+	# 准备训练集合
+	df_result = load_training_data(spark)
+	df_result = df_result.select("id", "label", "features")
+	labelIndexer = StringIndexer(inputCol="label", outputCol="indexedLabel").fit(df_result)
+	featureIndexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=2).fit(df_result)
+
+	# 1.1 构建训练集合
+	df_training = df_training.join(df_result, how="left", on="id")
+	df_training.show()
+
+	# 1.2 构建测试集合
+	df_test = df_test.join(df_result, how="left", on="id")
+	df_test.show()
 
 	# Train a DecisionTree model.
-	rf = RandomForestClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures", numTrees=10)
+	dt = RandomForestClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures", numTrees=10)
 
 	# Chain indexers and tree in a Pipeline
-	labelConverter = IndexToString(inputCol="prediction", outputCol="predictedLabel", labels=labelIndexer.labels)
-	pipeline = Pipeline(stages=[labelIndexer, featureIndexer, rf, labelConverter])
+	pipeline = Pipeline(stages=[labelIndexer, featureIndexer, dt])
 
 	# Train model.  This also runs the indexers.
-	model = pipeline.fit(trainingData)
+	model = pipeline.fit(df_training)
 
 	# Make predictions.
-	predictions = model.transform(testData)
+	df_predictions = model.transform(df_test)
 
 	# Select example rows to display.
-	predictions.select("prediction", "indexedLabel", "features").show(5)
+	df_predictions.select("prediction", "indexedLabel", "features").show(5)
 
 	# Select (prediction, true label) and compute test error
 	evaluator = MulticlassClassificationEvaluator(
 	    labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
-	accuracy = evaluator.evaluate(predictions)
+	accuracy = evaluator.evaluate(df_predictions)
 	print("Test Error = %g " % (1.0 - accuracy))
 
 	treeModel = model.stages[2]
 	# summary only
 	print(treeModel)
 
-	model.write().save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/rf")
+	model.write().overwrite().save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/rf")

@@ -22,6 +22,7 @@ from pyspark.ml.classification import MultilayerPerceptronClassificationModel
 from pyspark.ml.classification import DecisionTreeClassificationModel
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.ml import PipelineModel
+from pdu_feature import similarity
 
 
 def prepare():
@@ -81,7 +82,21 @@ if __name__ == '__main__':
 	df_ph = result.where((result.prediction == 1.0) | (result.label == 1.0))
 	ph_total = result.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
 	print(ph_total)
-	ph_positive_hit = result.where((result.prediction == result.label) & (result.label == 1.0)).count()
+
+	# 5. 尝试解决多高的问题
+	df_true_positive = similarity(result.where(result.prediction == 1.0))
+	df_true_positive = df_true_positive.where(df_true_positive.RANK == 1)
+
+	ph_positive_prodict = df_true_positive.count()
+	print(ph_positive_prodict)
+	ph_positive_hit = result.where((df_true_positive.prediction == result.label) & (result.label == 1.0)).count()
 	print(ph_positive_hit)
 	# ph_negetive_hit = result.where(result.prediction != result.label).count()
 	print("Pharbers Test set accuracy = " + str(ph_positive_hit / ph_total))
+	print("Pharbers Test set precision = " + str(ph_positive_hit / ph_positive_prodict))
+
+	df_true_positive.orderBy("id").repartition(1).where((result.prediction == 0.0) & (result.label == 1.0)).write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/false_negative")
+	df_true_positive.orderBy("id").repartition(1).where((result.prediction == 1.0) & (result.label == 0.0)).write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/false_positive")
+
+	# 6. 在未匹配数据中，在剩下的数据中，机器给出建议
+	
