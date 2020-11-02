@@ -81,7 +81,12 @@ if __name__ == '__main__':
 	df_ph = result.where((result.prediction == 1.0) | (result.label == 1.0))
 	ph_total = result.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
 	print(ph_total)
+	ph_positive_prodict = result.where((result.prediction == 1.0)).count()
+	print(ph_positive_prodict)
 	ph_positive_hit = result.where((result.prediction == result.label) & (result.label == 1.0)).count()
 	print(ph_positive_hit)
 	# ph_negetive_hit = result.where(result.prediction != result.label).count()
 	print("Pharbers Test set accuracy = " + str(ph_positive_hit / ph_total))
+
+	result.orderBy("id").repartition(1).where((result.prediction == 0.0) & (result.label == 1.0)).write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/false_negative")
+	result.orderBy("id").repartition(1).where((result.prediction == 1.0) & (result.label == 0.0)).write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/false_positive")
