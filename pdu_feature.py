@@ -30,38 +30,38 @@ from nltk.metrics import jaccard_distance as jd
 
 
 def dosage_standify(df, df_dosage_mapping):
-	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"（注射剂）", ""))
-	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"（粉剂针）", ""))
-	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"（胶丸、滴丸）", ""))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"（注射剂）", ""))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"（粉剂针）", ""))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"（胶丸、滴丸）", ""))
 
-	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"SOLN", "注射"))
-	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"POWD", "粉针"))
-	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"SUSP", "混悬"))
-	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"OINT", "膏剂"))
-	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"NA", "鼻"))
-	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"SYRP", "口服"))
-	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"PATC", "贴膏"))
-	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"EMUL", "乳"))
-	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"AERO", "气雾"))
-	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"RAN", "颗粒"))
-	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"SUPP", "栓"))
-	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"PILL", "丸"))
-	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"MISC", "混合"))
-	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"LIQD", "溶液"))
-	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"TAB", "片"))
-	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"CAP", "胶囊"))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"SOLN", "注射液"))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"POWD", "粉针剂"))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"SUSP", "混悬"))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"OINT", "膏剂"))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"NA", "鼻"))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"SYRP", "口服"))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"PATC", "贴膏"))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"EMUL", "乳"))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"AERO", "气雾"))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"RAN", "颗粒"))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"SUPP", "栓"))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"PILL", "丸"))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"MISC", "混合"))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"LIQD", "溶液"))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"TAB", "片"))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"CAP", "胶囊"))
 	
 	# cross join (only Chinese)
-	df_dosage = df.crossJoin(df_dosage_mapping.select("CPA_DOSAGE", "MASTER_DOSAGE").distinct())
-	df_dosage = df_dosage.withColumn("DOSAGE_SUB", when(df_dosage.DOSAGE.contains(df_dosage.CPA_DOSAGE) | df_dosage.CPA_DOSAGE.contains(df_dosage.DOSAGE), \
-									df_dosage.MASTER_DOSAGE).otherwise("")) \
-									.drop("MASTER_DOSAGE", "CPA_DOSAGE")
-	df_dosage = df_dosage.where(df_dosage.DOSAGE_SUB != "")
-	df_dosage = df_dosage.unionByName(df.withColumn("DOSAGE_SUB", df.DOSAGE)) \
-				.select("id", "PACK_ID_CHECK", "MOLE_NAME", "PRODUCT_NAME", "DOSAGE", "SPEC", "PACK_QTY", "MANUFACTURER_NAME", "DOSAGE_SUB").distinct()
-	df_dosage = df_dosage.withColumnRenamed("DOSAGE", "DOSAGE_ORIGINAL").withColumnRenamed("DOSAGE_SUB", "DOSAGE")
+	# df_dosage = df.crossJoin(df_dosage_mapping.select("CPA_DOSAGE", "MASTER_DOSAGE").distinct())
+	# df_dosage = df_dosage.withColumn("DOSAGE_SUB", when(df_dosage.DOSAGE.contains(df_dosage.CPA_DOSAGE) | df_dosage.CPA_DOSAGE.contains(df_dosage.DOSAGE), \
+	# 								df_dosage.MASTER_DOSAGE).otherwise("")) \
+	# 								.drop("MASTER_DOSAGE", "CPA_DOSAGE")
+	# df_dosage = df_dosage.where(df_dosage.DOSAGE_SUB != "")
+	# df_dosage = df_dosage.unionByName(df.withColumn("DOSAGE_SUB", df.DOSAGE)) \
+	# 			.select("id", "PACK_ID_CHECK", "MOLE_NAME", "PRODUCT_NAME", "DOSAGE", "SPEC", "PACK_QTY", "MANUFACTURER_NAME", "DOSAGE_SUB").distinct()
+	# df_dosage = df_dosage.withColumnRenamed("DOSAGE", "DOSAGE_ORIGINAL").withColumnRenamed("DOSAGE_SUB", "DOSAGE")
 	
-	return df_dosage
+	return df
 
 
 """
@@ -407,4 +407,17 @@ def similarity(df):
 
 
 def hit_place_prediction(df, pos):
-	return df.withColumn("prediction_" + str(pos), when((df.RANK == pos) & (df.label == 1.0), 1.0).otherwise(0.0))
+	return df.withColumn("prediction_" + str(pos), when((df.RANK == pos), 1.0).otherwise(0.0))
+	# return df.withColumn("prediction_" + str(pos), when((df.RANK == pos) & (df.label == 1.0), 1.0).otherwise(0.0))
+
+
+@pandas_udf(DoubleType(), PandasUDFType.SCALAR)
+def dosage_replace(dosage_lst, dosage_standard, eff):
+	
+	frame = { "MASTER_DOSAGE": dosage_lst, "DOSAGE_STANDARD": dosage_standard, "EFFTIVENESS_DOSAGE": eff }
+	df = pd.DataFrame(frame)
+	
+	df["EFFTIVENESS"] = df.apply(lambda x: 1.0 if x["DOSAGE_STANDARD"] in x["MASTER_DOSAGE"] \
+											else x["EFFTIVENESS_DOSAGE"], axis=1)
+	
+	return df["EFFTIVENESS"]

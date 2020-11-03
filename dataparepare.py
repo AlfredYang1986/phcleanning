@@ -19,13 +19,13 @@ from pyspark.sql.types import *
 
 
 # raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/azsanofi_check"
-raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/raw_data"
-split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.4/splitdata"
-training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.4/tmp/data3"
+# raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/raw_data"
+# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.4/splitdata"
+# training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.4/tmp/data3"
 
-# raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/raw_data"
-# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.2/splitdata"
-# training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.2/tmp/data3"
+raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/raw_data"
+split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.4/splitdata"
+training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.4/tmp/data3"
 
 
 """
@@ -144,7 +144,7 @@ def load_interfere_mapping(spark):
 读取剂型替换表
 """
 def load_dosage_mapping(spark):
-	df_dosage_mapping = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/cpa_dosage_mapping")
+	df_dosage_mapping = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/cpa_dosage_mapping/cpa_dosage_lst")
 	return df_dosage_mapping
 
 
@@ -152,9 +152,10 @@ def load_dosage_mapping(spark):
 	Load CrossJoin
 """
 def load_training_data(spark):
-	 #return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data2") # pifer
+	 return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data2") # pifer
 	 #return spark.read.parquet(training_data_path)
-	 return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.2/tmp/data3") # az
+	 #return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.2/tmp/data3") # az
+	 #return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.1/tmp/data3") # az
 	 
 
 
