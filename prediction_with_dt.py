@@ -57,6 +57,7 @@ if __name__ == '__main__':
 
 	# 1. load the data
 	df_result = load_training_data(spark)
+	df_result.printSchema()
 	df_validate = df_result #.select("id", "label", "features").orderBy("id")
 
 	# 2. load model

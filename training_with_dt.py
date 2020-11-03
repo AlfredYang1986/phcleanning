@@ -88,6 +88,7 @@ if __name__ == '__main__':
 	df_predictions = model.transform(df_test)
 
 	# Select example rows to display.
+	df_predictions.show(10)
 	df_predictions.select("prediction", "indexedLabel", "features").show(5)
 
 	# Select (prediction, true label) and compute test error
@@ -100,4 +101,4 @@ if __name__ == '__main__':
 	# summary only
 	print(treeModel)
 
-	model.write().overwrite().save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/dt")
+	# model.write().overwrite().save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/dt")

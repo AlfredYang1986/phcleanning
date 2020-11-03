@@ -400,8 +400,8 @@ def similarity(df):
 	# 写入给彭总
 	
 	df = df.where((df.RANK <= 5) | (df.label == 1.0))
-	df.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.3/result_analyse/all_similarity_rank5")
-	print("写入完成")
+	# df.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.3/result_analyse/all_similarity_rank5")
+	# print("写入完成")
 
 	return df
 

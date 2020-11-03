@@ -27,9 +27,9 @@ import pandas as pd
 
 
 # @尹 代码不允许出现全局变量,每一个变量必须有规定的生命周期
-split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.3/splitdata"
-training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.2/tmp/data3"
-result_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.2/tmp/data3"
+split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.4/splitdata"
+training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.4/tmp/data3"
+result_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.4/tmp/data3"
 
 
 def prepare():
@@ -78,8 +78,7 @@ if __name__ == '__main__':
 	df_standard = df_standard.withColumn("SPEC", df_standard.SPEC_STANDARD)
 	df_standard = spec_standify(df_standard)
 	df_standard = df_standard.withColumn("SPEC_STANDARD", df_standard.SPEC).drop("SPEC")
-	df_cleanning = dosage_standify(df_cleanning, df_dosage_mapping)  # 剂型列规范 
-	print(df_cleanning.count())
+	df_cleanning = dosage_standify(df_cleanning, df_dosage_mapping)  # 剂型列规范
 	
 	# 2. cross join
 	df_result = df_cleanning.crossJoin(broadcast(df_standard)).na.fill("")
