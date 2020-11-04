@@ -356,7 +356,7 @@ def percent_pandas_udf(percent, valid, gross):
 
 
 def spec_standify(df):
-	df = df.withColumn("SPEC_ORIGINAL", df.SPEC)
+	# df = df.withColumn("SPEC_ORIGINAL", df.SPEC)
 	df = df.withColumn("SPEC", regexp_replace("SPEC", r"(万)", "T"))
 	df = df.withColumn("SPEC", regexp_replace("SPEC", r"(μ)", "U"))
 	df = df.withColumn("SPEC", upper(df.SPEC))
@@ -421,3 +421,86 @@ def dosage_replace(dosage_lst, dosage_standard, eff):
 											else x["EFFTIVENESS_DOSAGE"], axis=1)
 	
 	return df["EFFTIVENESS"]
+	
+	
+@pandas_udf(DoubleType(), PandasUDFType.SCALAR)
+def prod_name_replace(mole_name, mole_name_standard, mnf_name, mnf_name_standard, mnf_en_standard):
+	
+	def jaro_similarity(s1, s2):
+		# First, store the length of the strings
+		# because they will be re-used several times.
+		len_s1, len_s2 = len(s1), len(s2)
+
+		# The upper bound of the distance for being a matched character.
+		match_bound = max(len_s1, len_s2) // 2 - 1
+
+		# Initialize the counts for matches and transpositions.
+		matches = 0  # no.of matched characters in s1 and s2
+		transpositions = 0  # no. of transpositions between s1 and s2
+		flagged_1 = []  # positions in s1 which are matches to some character in s2
+		flagged_2 = []  # positions in s2 which are matches to some character in s1
+
+		# Iterate through sequences, check for matches and compute transpositions.
+		for i in range(len_s1):  # Iterate through each character.
+			upperbound = min(i + match_bound, len_s2 - 1)
+			lowerbound = max(0, i - match_bound)
+			for j in range(lowerbound, upperbound + 1):
+				if s1[i] == s2[j] and j not in flagged_2:
+					matches += 1
+					flagged_1.append(i)
+					flagged_2.append(j)
+					break
+		flagged_2.sort()
+		for i, j in zip(flagged_1, flagged_2):
+			if s1[i] != s2[j]:
+				transpositions += 1
+
+		if matches == 0:
+			return 0
+		else:
+			return (
+				1
+				/ 3
+				* (
+					matches / len_s1
+					+ matches / len_s2
+					+ (matches - transpositions // 2) / matches
+				)
+			)
+
+
+	def jaro_winkler_similarity(s1, s2, p=0.1, max_l=4):
+		if not 0 <= max_l * p <= 1:
+		    print("The product  `max_l * p` might not fall between [0,1].Jaro-Winkler similarity might not be between 0 and 1.")
+
+		# Compute the Jaro similarity
+		jaro_sim = jaro_similarity(s1, s2)
+
+		# Initialize the upper bound for the no. of prefixes.
+		# if user did not pre-define the upperbound,
+		# use shorter length between s1 and s2
+
+		# Compute the prefix matches.
+		l = 0
+		# zip() will automatically loop until the end of shorter string.
+		for s1_i, s2_i in zip(s1, s2):
+			if s1_i == s2_i:
+				l += 1
+			else:
+				break
+			if l == max_l:
+				break
+		# Return the similarity value as described in docstring.
+		return jaro_sim + (l * p * (1 - jaro_sim))
+
+	
+	frame = { "MOLE_NAME": mole_name, "MOLE_NAME_STANDARD": mole_name_standard,
+			  "MANUFACTURER_NAME": mnf_name, "MANUFACTURER_NAME_STANDARD": mnf_name_standard, "MANUFACTURER_NAME_EN_STANDARD": mnf_en_standard }
+	df = pd.DataFrame(frame)
+	
+	df["EFFTIVENESS_PROD"] = df.apply(lambda x: max((jaro_winkler_similarity((x["MOLE_NAME"] + x["MANUFACTURER_NAME"]), \
+																		(x["MOLE_NAME_STANDARD"] + x["MANUFACTURER_NAME_STANDARD"]))), \
+												(jaro_winkler_similarity((x["MOLE_NAME"] + x["MANUFACTURER_NAME"]), \
+																		(x["MOLE_NAME_STANDARD"] + x["MANUFACTURER_NAME_EN_STANDARD"])))), axis=1)
+	
+	return df["EFFTIVENESS_PROD"]

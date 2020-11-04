@@ -44,10 +44,10 @@ def prepare():
 
 	return spark
 
-error_match_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.4/result_analyse/error_match"
-no_label_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.4/result_analyse/no_label"
-accuracy_by_mole_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.4/result_analyse/accuracy_by_mole_path"
-raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/raw_data"
+error_match_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.4/result_analyse/error_match"
+no_label_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.4/result_analyse/no_label"
+accuracy_by_mole_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.4/result_analyse/accuracy_by_mole_path"
+raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/raw_data"
 
 
 if __name__ == '__main__':
@@ -55,8 +55,6 @@ if __name__ == '__main__':
 
 	df_result = load_training_data(spark)
 	df_result = similarity(df_result)
-	xixi1=df_result.toPandas()
-	xixi1.to_excel('Pfizer_PFZ10_outlier.xlsx', index = False)
 	# download_prod_standard(spark)
 	
 	# 0. check the result

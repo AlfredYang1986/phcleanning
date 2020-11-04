@@ -65,8 +65,8 @@ def load_standard_prod(spark):
 读取待清洗的数据
 """
 def load_cleanning_prod(spark):
-	 df_cleanning = spark.read.parquet("s3a://ph-stream/common/public/pfizer_check").drop("version")
-	 #df_cleanning = spark.read.parquet(raw_data_path).drop("version")
+	 #df_cleanning = spark.read.parquet("s3a://ph-stream/common/public/pfizer_check").drop("version")
+	 df_cleanning = spark.read.parquet(raw_data_path).drop("version")
 
 	 # 为了验证算法，保证id尽可能可读性，投入使用后需要删除
 	 df_cleanning = df_cleanning.repartition(1).withColumn("id", monotonically_increasing_id())
@@ -152,8 +152,8 @@ def load_dosage_mapping(spark):
 	Load CrossJoin
 """
 def load_training_data(spark):
-	 return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data2") # pifer
-	 #return spark.read.parquet(training_data_path)
+	 #return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data2") # pifer
+	 return spark.read.parquet(training_data_path)
 	 #return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.2/tmp/data3") # az
 	 #return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.1/tmp/data3") # az
 	 

@@ -1,12 +1,6 @@
 # -*- coding: utf-8 -*-
 """alfredyang@pharbers.com.
 
-功能描述：job3：left join cpa和prod
-  * @author yzy
-  * @version 0.0
-  * @since 2020/08/12
-  * @note  落盘数据：cpa_prod_join
-
 """
 
 import os
@@ -22,7 +16,7 @@ from pyspark.ml.classification import MultilayerPerceptronClassificationModel
 from pyspark.ml.classification import DecisionTreeClassificationModel
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.ml import PipelineModel
-from pdu_feature import similarity, hit_place_prediction, dosage_replace
+from pdu_feature import similarity, hit_place_prediction, dosage_replace, prod_name_replace
 from pyspark.ml.feature import VectorAssembler
 
 
@@ -124,22 +118,37 @@ if __name__ == '__main__':
 	print("第二轮总量= " + str(count_prediction_se))
 	
 	# 第二轮筛选的方法是：再对dosage列重新计算eff，要用到dosage_mapping
-	df_second_round = df_candidate
+	df_second_round = df_candidate.drop("prediction", "indexedLabel", "indexedFeatures", "rawPrediction", "probability", "features")
 	dosage_mapping = load_dosage_mapping(spark)
 	df_second_round = df_second_round.join(dosage_mapping, df_second_round.DOSAGE == dosage_mapping.CPA_DOSAGE, how="left").na.fill("")
-	df_second_round = df_second_round.withColumn("EFFTIVENESS_DOSAGE_SE", dosage_replace(df_second_round.DOSAGE, \
+	df_second_round = df_second_round.withColumn("EFFTIVENESS_DOSAGE_SE", dosage_replace(df_second_round.MASTER_DOSAGE, \
 														df_second_round.DOSAGE_STANDARD, df_second_round.EFFTIVENESS_DOSAGE)) 
+														
+	df_second_round = df_second_round.withColumn("EFFTIVENESS_PRODUCT_NAME_SE", prod_name_replace(df_second_round.MOLE_NAME, df_second_round.MOLE_NAME_STANDARD, \
+														df_second_round.MANUFACTURER_NAME, df_second_round.MANUFACTURER_NAME_STANDARD, df_second_round.MANUFACTURER_NAME_EN_STANDARD)) 
 	assembler = VectorAssembler( \
-				inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_DOSAGE_SE", "EFFTIVENESS_SPEC", \
+				inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_PRODUCT_NAME_SE", "EFFTIVENESS_DOSAGE_SE", "EFFTIVENESS_SPEC", \
 							"EFFTIVENESS_PACK_QTY", "EFFTIVENESS_MANUFACTURER"], \
 				outputCol="features")
 	df_second_round = assembler.transform(df_second_round)
-	df_second_round.repartition(10).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/second_round_dt")
+	# df_second_round.repartition(10).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/second_round_dt")
 	
-	predictions_second_round = model.transform(df_second_round.drop("prediction", "indexedLabel"))
+	predictions_second_round = model.transform(df_second_round)
+	# xixi1=predictions_second_round.toPandas()
+	# xixi1.to_excel('pred_second.xlsx', index = False)
+	predictions_second_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/second_round_prediction_2")
+	
+	
+	evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
+	accuracy = evaluator.evaluate(predictions_second_round)
+	print("Test Error = %g " % (1.0 - accuracy))
+	print("Test set accuracy = " + str(accuracy))
 	
 	# 第二轮正确率检测
+	predictions_second_round.show()
 	df_true_positive_se = predictions_second_round.where(predictions_second_round.prediction == 1.0)
+	df_true_positive_se.show()
+	
 	ph_positive_prodict_se = df_true_positive_se.count()
 	print("机器判断第二轮TP条目 = " + str(ph_positive_prodict_se))
 	ph_positive_hit_se = df_true_positive_se.where((df_true_positive_se.prediction == df_true_positive_se.label) & (df_true_positive_se.label == 1.0)).count()
@@ -166,13 +175,13 @@ if __name__ == '__main__':
 	# print("第一正确匹配pack id presicion = " + str(positive_hit_1_tp / (positive_hit_1_fp + positive_hit_1_tp)))
 
 	# # 7. 两轮估算总量
-	# ph_positive_prodict = ph_positive_prodict + positive_hit_1_tp + positive_hit_1_fp
-	# print("两轮判断TP总量 = " + str(ph_positive_prodict))
-	# ph_positive_hit = ph_positive_hit + positive_hit_1_tp
-	# print("两轮判断TP总正确数量 = " + str(ph_positive_hit))
-	# # ph_negetive_hit = result.where(result.prediction != result.label).count()
-	# print("Pharbers Test set accuracy （两轮判断TP总比例） = " + str(ph_positive_hit / ph_total))
-	# print("Pharbers Test set precision （两轮判断TP总正确率）= " + str(ph_positive_hit / ph_positive_prodict))
+	ph_positive_prodict = ph_positive_prodict + ph_positive_prodict_se
+	print("两轮判断TP总量 = " + str(ph_positive_prodict))
+	ph_positive_hit = ph_positive_hit + ph_positive_hit_se
+	print("两轮判断TP总正确数量 = " + str(ph_positive_hit))
+	# ph_negetive_hit = result.where(result.prediction != result.label).count()
+	print("Pharbers Test set accuracy （两轮判断TP总比例） = " + str(ph_positive_hit / ph_total))
+	print("Pharbers Test set precision （两轮判断TP总正确率）= " + str(ph_positive_hit / ph_positive_prodict))
 
 
 	# 8. 第三轮，剩下的给出猜测
