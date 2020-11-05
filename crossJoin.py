@@ -26,6 +26,12 @@ import pandas as pd
 
 
 
+# @尹 代码不允许出现全局变量,每一个变量必须有规定的生命周期
+split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.4/splitdata"
+training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.4/tmp/data3"
+result_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.4/tmp/data3"
+
+
 def prepare():
 	os.environ["PYSPARK_PYTHON"] = "python3"
 	# 读取s3桶中的数据
@@ -59,19 +65,21 @@ if __name__ == '__main__':
 	spark = prepare()
 	df_standard = load_standard_prod(spark)
 	df_interfere = load_interfere_mapping(spark)
+	df_dosage_mapping = load_dosage_mapping(spark)
 
 	# 1. human interfere 与 数据准备
 	modify_pool_cleanning_prod(spark)  # 更高的并发数
-	df_cleanning = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/splitdata")
+	df_cleanning = spark.read.parquet(split_data_path)
 	df_cleanning = df_cleanning.repartition(1600)
 	df_cleanning = human_interfere(spark, df_cleanning, df_interfere)
-	df_cleanning = dosage_standify(df_cleanning)  # 剂型列规范
+	# df_cleanning = dosage_standify(df_cleanning)  # 剂型列规范
 	df_cleanning = spec_standify(df_cleanning)  # 规格列规范
 
 	df_standard = df_standard.withColumn("SPEC", df_standard.SPEC_STANDARD)
 	df_standard = spec_standify(df_standard)
 	df_standard = df_standard.withColumn("SPEC_STANDARD", df_standard.SPEC).drop("SPEC")
-
+	# df_cleanning = dosage_standify(df_cleanning, df_dosage_mapping)  # 剂型列规范
+	
 	# 2. cross join
 	df_result = df_cleanning.crossJoin(broadcast(df_standard)).na.fill("")
 
@@ -112,7 +120,7 @@ if __name__ == '__main__':
 	# df_result.show()
 
 	# features
-	assembler = VectorAssembler( \  # 将多列数据转化为单列的向量列
+	assembler = VectorAssembler( \
 					inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_SPEC", \
 								"EFFTIVENESS_PACK_QTY", "EFFTIVENESS_MANUFACTURER"], \
 					outputCol="features")
@@ -124,5 +132,4 @@ if __name__ == '__main__':
 					when((df_result.PACK_ID_CHECK_NUM > 0) & (df_result.PACK_ID_STANDARD_NUM > 0) & (df_result.PACK_ID_CHECK_NUM == df_result.PACK_ID_STANDARD_NUM), 1.0).otherwise(0.0)) \
 					.drop("PACK_ID_CHECK_NUM", "PACK_ID_STANDARD_NUM")
 
-	df_result.repartition(10).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data3")
-  
+	df_result.repartition(10).write.mode("overwrite").parquet(result_path)

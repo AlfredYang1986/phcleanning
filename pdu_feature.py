@@ -29,13 +29,13 @@ from nltk.metrics import jaccard_distance as jd
 # from nltk.metrics import jaro_winkler_similarity as jws
 
 
-def dosage_standify(df):
+def dosage_standify(df, df_dosage_mapping):
 	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"（注射剂）", ""))
 	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"（粉剂针）", ""))
 	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"（胶丸、滴丸）", ""))
 
-	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"SOLN", "注射"))
-	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"POWD", "粉针"))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"SOLN", "注射液"))
+	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"POWD", "粉针剂"))
 	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"SUSP", "混悬"))
 	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"OINT", "膏剂"))
 	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"NA", "鼻"))
@@ -50,6 +50,17 @@ def dosage_standify(df):
 	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"LIQD", "溶液"))
 	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"TAB", "片"))
 	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"CAP", "胶囊"))
+	
+	# cross join (only Chinese)
+	# df_dosage = df.crossJoin(df_dosage_mapping.select("CPA_DOSAGE", "MASTER_DOSAGE").distinct())
+	# df_dosage = df_dosage.withColumn("DOSAGE_SUB", when(df_dosage.DOSAGE.contains(df_dosage.CPA_DOSAGE) | df_dosage.CPA_DOSAGE.contains(df_dosage.DOSAGE), \
+	# 								df_dosage.MASTER_DOSAGE).otherwise("")) \
+	# 								.drop("MASTER_DOSAGE", "CPA_DOSAGE")
+	# df_dosage = df_dosage.where(df_dosage.DOSAGE_SUB != "")
+	# df_dosage = df_dosage.unionByName(df.withColumn("DOSAGE_SUB", df.DOSAGE)) \
+	# 			.select("id", "PACK_ID_CHECK", "MOLE_NAME", "PRODUCT_NAME", "DOSAGE", "SPEC", "PACK_QTY", "MANUFACTURER_NAME", "DOSAGE_SUB").distinct()
+	# df_dosage = df_dosage.withColumnRenamed("DOSAGE", "DOSAGE_ORIGINAL").withColumnRenamed("DOSAGE_SUB", "DOSAGE")
+	
 	return df
 
 
@@ -232,15 +243,15 @@ def efftiveness_with_jaro_winkler_similarity(mo, ms, po, ps, do, ds, so, ss, qo,
 										else jaro_winkler_similarity(x["DOSAGE"], x["DOSAGE_STANDARD"]), axis=1)
 	df["SPEC_JWS"] = df.apply(lambda x: 1 if x["SPEC"] in x ["SPEC_STANDARD"] \
 										else 1 if x["SPEC_STANDARD"] in x ["SPEC"] \
-										else jaro_winkler_similarity(x["SPEC"], x["SPEC_STANDARD"]), axis=1)
-	df["PACK_QTY_JWS"] = df.apply(lambda x: 1 if x["PACK_QTY"] == x["PACK_QTY_STANDARD"].replace(".0", "") \
-										else jaro_winkler_similarity(x["PACK_QTY"], x["PACK_QTY_STANDARD"].replace(".0", "")), axis=1)
+										else jaro_winkler_similarity(x["SPEC"].strip(), x["SPEC_STANDARD"].strip()), axis=1)
+	df["PACK_QTY_JWS"] = df.apply(lambda x: 1 if x["PACK_QTY"].replace(".0", "") == x["PACK_QTY_STANDARD"].replace(".0", "") \
+										else jaro_winkler_similarity(x["PACK_QTY"].replace(".0", ""), x["PACK_QTY_STANDARD"].replace(".0", "")), axis=1)
 	df["MANUFACTURER_NAME_CH_JWS"] = df.apply(lambda x: 1 if x["MANUFACTURER_NAME"] in x ["MANUFACTURER_NAME_STANDARD"] \
 										else 1 if x["MANUFACTURER_NAME_STANDARD"] in x ["MANUFACTURER_NAME"] \
 										else jaro_winkler_similarity(x["MANUFACTURER_NAME"], x["MANUFACTURER_NAME_STANDARD"]), axis=1)
 	df["MANUFACTURER_NAME_EN_JWS"] = df.apply(lambda x: 1 if x["MANUFACTURER_NAME"] in x ["MANUFACTURER_NAME_EN_STANDARD"] \
 										else 1 if x["MANUFACTURER_NAME_EN_STANDARD"] in x ["MANUFACTURER_NAME"] \
-										else jaro_winkler_similarity(x["MANUFACTURER_NAME"], x["MANUFACTURER_NAME_EN_STANDARD"]), axis=1)
+										else jaro_winkler_similarity(x["MANUFACTURER_NAME"].upper(), x["MANUFACTURER_NAME_EN_STANDARD"].upper()), axis=1)
 	df["MANUFACTURER_NAME_MINUS"] = df["MANUFACTURER_NAME_CH_JWS"] - df["MANUFACTURER_NAME_EN_JWS"]
 	df.loc[df["MANUFACTURER_NAME_MINUS"] < 0.0, "MANUFACTURER_NAME_JWS"] = df["MANUFACTURER_NAME_EN_JWS"]
 	df.loc[df["MANUFACTURER_NAME_MINUS"] >= 0.0, "MANUFACTURER_NAME_JWS"] = df["MANUFACTURER_NAME_CH_JWS"]
@@ -345,6 +356,7 @@ def percent_pandas_udf(percent, valid, gross):
 
 
 def spec_standify(df):
+	# df = df.withColumn("SPEC_ORIGINAL", df.SPEC)
 	df = df.withColumn("SPEC", regexp_replace("SPEC", r"(万)", "T"))
 	df = df.withColumn("SPEC", regexp_replace("SPEC", r"(μ)", "U"))
 	df = df.withColumn("SPEC", upper(df.SPEC))
@@ -374,16 +386,121 @@ def spec_standify(df):
 
 
 def similarity(df):
-	df = df.withColumn("SIMILARITY", df.EFFTIVENESS_MOLE_NAME + df.EFFTIVENESS_PRODUCT_NAME + df.EFFTIVENESS_DOSAGE \
-						+ df.EFFTIVENESS_SPEC + df.EFFTIVENESS_PACK_QTY + df.EFFTIVENESS_MANUFACTURER)
+	df = df.withColumn("SIMILARITY", \
+					when(df.PRODUCT_NAME.contains(df.MOLE_NAME) | df.MOLE_NAME.contains(df.PRODUCT_NAME), \
+						1.2*df.EFFTIVENESS_MOLE_NAME + 1.2*df.EFFTIVENESS_DOSAGE \
+						+ 1.2*df.EFFTIVENESS_SPEC + 1.2*df.EFFTIVENESS_PACK_QTY + 1.2*df.EFFTIVENESS_MANUFACTURER) \
+					.otherwise(df.EFFTIVENESS_MOLE_NAME + df.EFFTIVENESS_PRODUCT_NAME + df.EFFTIVENESS_DOSAGE \
+						+ df.EFFTIVENESS_SPEC + df.EFFTIVENESS_PACK_QTY + df.EFFTIVENESS_MANUFACTURER))
 
-	windowSpec  = Window.partitionBy("id").orderBy(desc("SIMILARITY"))
+	windowSpec = Window.partitionBy("id").orderBy(desc("SIMILARITY"), desc("EFFTIVENESS_MOLE_NAME"), desc("EFFTIVENESS_DOSAGE"), desc("PACK_ID_STANDARD"))
 
 	df = df.withColumn("RANK", rank().over(windowSpec))
+	
+	# 写入给彭总
+	
 	df = df.where((df.RANK <= 5) | (df.label == 1.0))
+	# df.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.3/result_analyse/all_similarity_rank5")
+	# print("写入完成")
 
 	return df
 
 
 def hit_place_prediction(df, pos):
-	return df.withColumn("prediction_" + str(pos), when((df.RANK == pos) & (df.label == 1.0), 1.0).otherwise(0.0))
+	return df.withColumn("prediction_" + str(pos), when((df.RANK == pos), 1.0).otherwise(0.0))
+	# return df.withColumn("prediction_" + str(pos), when((df.RANK == pos) & (df.label == 1.0), 1.0).otherwise(0.0))
+
+
+@pandas_udf(DoubleType(), PandasUDFType.SCALAR)
+def dosage_replace(dosage_lst, dosage_standard, eff):
+	
+	frame = { "MASTER_DOSAGE": dosage_lst, "DOSAGE_STANDARD": dosage_standard, "EFFTIVENESS_DOSAGE": eff }
+	df = pd.DataFrame(frame)
+	
+	df["EFFTIVENESS"] = df.apply(lambda x: 1.0 if x["DOSAGE_STANDARD"] in x["MASTER_DOSAGE"] \
+											else x["EFFTIVENESS_DOSAGE"], axis=1)
+	
+	return df["EFFTIVENESS"]
+	
+	
+@pandas_udf(DoubleType(), PandasUDFType.SCALAR)
+def prod_name_replace(mole_name, mole_name_standard, mnf_name, mnf_name_standard, mnf_en_standard):
+	
+	def jaro_similarity(s1, s2):
+		# First, store the length of the strings
+		# because they will be re-used several times.
+		len_s1, len_s2 = len(s1), len(s2)
+
+		# The upper bound of the distance for being a matched character.
+		match_bound = max(len_s1, len_s2) // 2 - 1
+
+		# Initialize the counts for matches and transpositions.
+		matches = 0  # no.of matched characters in s1 and s2
+		transpositions = 0  # no. of transpositions between s1 and s2
+		flagged_1 = []  # positions in s1 which are matches to some character in s2
+		flagged_2 = []  # positions in s2 which are matches to some character in s1
+
+		# Iterate through sequences, check for matches and compute transpositions.
+		for i in range(len_s1):  # Iterate through each character.
+			upperbound = min(i + match_bound, len_s2 - 1)
+			lowerbound = max(0, i - match_bound)
+			for j in range(lowerbound, upperbound + 1):
+				if s1[i] == s2[j] and j not in flagged_2:
+					matches += 1
+					flagged_1.append(i)
+					flagged_2.append(j)
+					break
+		flagged_2.sort()
+		for i, j in zip(flagged_1, flagged_2):
+			if s1[i] != s2[j]:
+				transpositions += 1
+
+		if matches == 0:
+			return 0
+		else:
+			return (
+				1
+				/ 3
+				* (
+					matches / len_s1
+					+ matches / len_s2
+					+ (matches - transpositions // 2) / matches
+				)
+			)
+
+
+	def jaro_winkler_similarity(s1, s2, p=0.1, max_l=4):
+		if not 0 <= max_l * p <= 1:
+		    print("The product  `max_l * p` might not fall between [0,1].Jaro-Winkler similarity might not be between 0 and 1.")
+
+		# Compute the Jaro similarity
+		jaro_sim = jaro_similarity(s1, s2)
+
+		# Initialize the upper bound for the no. of prefixes.
+		# if user did not pre-define the upperbound,
+		# use shorter length between s1 and s2
+
+		# Compute the prefix matches.
+		l = 0
+		# zip() will automatically loop until the end of shorter string.
+		for s1_i, s2_i in zip(s1, s2):
+			if s1_i == s2_i:
+				l += 1
+			else:
+				break
+			if l == max_l:
+				break
+		# Return the similarity value as described in docstring.
+		return jaro_sim + (l * p * (1 - jaro_sim))
+
+	
+	frame = { "MOLE_NAME": mole_name, "MOLE_NAME_STANDARD": mole_name_standard,
+			  "MANUFACTURER_NAME": mnf_name, "MANUFACTURER_NAME_STANDARD": mnf_name_standard, "MANUFACTURER_NAME_EN_STANDARD": mnf_en_standard }
+	df = pd.DataFrame(frame)
+	
+	df["EFFTIVENESS_PROD"] = df.apply(lambda x: max((jaro_winkler_similarity((x["MOLE_NAME"] + x["MANUFACTURER_NAME"]), \
+																		(x["MOLE_NAME_STANDARD"] + x["MANUFACTURER_NAME_STANDARD"]))), \
+												(jaro_winkler_similarity((x["MOLE_NAME"] + x["MANUFACTURER_NAME"]), \
+																		(x["MOLE_NAME_STANDARD"] + x["MANUFACTURER_NAME_EN_STANDARD"])))), axis=1)
+	
+	return df["EFFTIVENESS_PROD"]
