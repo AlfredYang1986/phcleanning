@@ -45,10 +45,17 @@ def prepare():
 
 if __name__ == '__main__':
 	spark = prepare()
-	df = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/azsanofi_check/0.0.12/raw_data")
+	df = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/dosage1_prediction0")
 	# df = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data2")
 	# df = df.withColumn("JACCARD_DISTANCE_MOLE_NAME", df.JACCARD_DISTANCE[0]) \
 	# 		.withColumn("JACCARD_DISTANCE_DOSAGE", df.JACCARD_DISTANCE[1]) \
 	# 		.drop("JACCARD_DISTANCE", "features")
-	df.show()
+	print(df.count())
+	df_r = df.select("id","label", "features", "rawPrediction", "probability", "prediction").where((df.label == 1.0) & (df.prediction == 1.0))
+	# df_r.show(1000, truncate=False)
+	print(df_r.count())
+	df_f = df.select("id","label", "features", "rawPrediction", "probability", "prediction").where((df.label == 1.0) & (df.prediction == 0.0))
+	# df_f.show(1000, truncate=False)
+	print(df_f.count())
+
 	# df = df.orderBy("id").drop("features").repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/validate")

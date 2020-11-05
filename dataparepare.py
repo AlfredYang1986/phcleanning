@@ -72,7 +72,7 @@ def load_cleanning_prod(spark):
 	 df_cleanning = df_cleanning.repartition(1).withColumn("id", monotonically_increasing_id())
 	 print(df_cleanning.count())
 	 #df_cleanning = df_cleanning.readStream.withColumn("id", monotonically_increasing_id())
-	
+
 	 # 为了算法更高的并发，在这里将文件拆分为16个，然后以16的并发数开始跑人工智能
 	 # df_cleanning.repartition(16).write.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/splitdata")
 	 return df_cleanning
@@ -152,11 +152,11 @@ def load_dosage_mapping(spark):
 	Load CrossJoin
 """
 def load_training_data(spark):
-	 #return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data2") # pifer
-	 return spark.read.parquet(training_data_path)
+	 return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data2") # pifer
+	 #return spark.read.parquet(training_data_path)
 	 #return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.2/tmp/data3") # az
 	 #return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.1/tmp/data3") # az
-	 
+
 
 
 """
