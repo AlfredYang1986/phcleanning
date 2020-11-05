@@ -101,4 +101,4 @@ if __name__ == '__main__':
 	# summary only
 	print(treeModel)
 
-	# model.write().overwrite().save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/dt")
+	model.write().overwrite().save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/dt")
