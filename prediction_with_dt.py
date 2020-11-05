@@ -140,7 +140,7 @@ if __name__ == '__main__':
 	# df_second_round.repartition(10).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/second_round_dt")
 	
 	predictions_second_round = model.transform(df_second_round)
-	predictions_second_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/second_round_prediction1105_2")
+	predictions_second_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/second_round_prediction1105_1")
 	evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
 	accuracy = evaluator.evaluate(predictions_second_round)
 	print("Test Error = %g " % (1.0 - accuracy))
@@ -167,10 +167,15 @@ if __name__ == '__main__':
 	ph_positive_hit = ph_positive_hit + ph_positive_hit_se
 	print("两轮判断TP总正确数量 = " + str(ph_positive_hit))
 	# ph_negetive_hit = result.where(result.prediction != result.label).count()
-	print("Pharbers Test set accuracy （两轮判断TP总比例） = " + str(ph_positive_hit / ph_total))
-	print("Pharbers Test set precision （两轮判断TP总正确率）= " + str(ph_positive_hit / ph_positive_prodict))
+	if ph_positive_prodict_se == 0:
+		print("Pharbers Test set accuracy （两轮判断TP总比例） = 0")
+		print("Pharbers Test set precision （两轮判断TP总正确率）= 0")
+	else:
+		print("Pharbers Test set accuracy （两轮判断TP总比例） = " + str(ph_positive_hit / ph_total))
+		print("Pharbers Test set precision （两轮判断TP总正确率）= " + str(ph_positive_hit / ph_positive_prodict))
+	
 
-	# 8. 第三轮，剩下的给出猜测
+	# 8. 第三轮
 	df_prediction_se = df_true_positive_se.select("id").distinct()
 	id_local_se = df_prediction_se.toPandas()["id"].tolist()  
 	print(len(id_local))
@@ -179,16 +184,48 @@ if __name__ == '__main__':
 	df_candidate_third = result.where(~result.id.isin(id_local_total))
 	count_third = df_candidate_third.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
 	print("第三轮总量= " + str(count_third))
+	
+	
+	df_third_round = df_candidate_third.drop("prediction", "indexedLabel", "indexedFeatures", "rawPrediction", "probability", "features")
+	dosage_mapping = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/cpa_dosage_mapping/cpa_dosage_lst")
+	df_third_round.show(5)
+	df_third_round = df_third_round.join(dosage_mapping, df_third_round.DOSAGE == dosage_mapping.CPA_DOSAGE, how="left").na.fill("")
+	df_third_round = df_third_round.withColumn("EFFTIVENESS_DOSAGE_TH", dosage_replace(df_third_round.MASTER_DOSAGE, \
+														df_third_round.DOSAGE_STANDARD, df_third_round.EFFTIVENESS_DOSAGE)) 
+	df_third_round = df_third_round.withColumn("EFFTIVENESS_PRODUCT_NAME_SE", prod_name_replace(df_third_round.MOLE_NAME, df_third_round.MOLE_NAME_STANDARD, \
+														df_third_round.MANUFACTURER_NAME, df_third_round.MANUFACTURER_NAME_STANDARD, df_third_round.MANUFACTURER_NAME_EN_STANDARD))
+	
+	assembler = VectorAssembler( \
+				inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_PRODUCT_NAME_SE", "EFFTIVENESS_DOSAGE_TH", "EFFTIVENESS_SPEC", \
+							"EFFTIVENESS_PACK_QTY", "EFFTIVENESS_MANUFACTURER"], \
+				outputCol="features")
+	df_third_round = assembler.transform(df_third_round)
+	# df_second_round.repartition(10).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/second_round_dt")
+	
+	predictions_third_round = model.transform(df_third_round)
+	predictions_third_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_prediction1105_2")
+	evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
+	accuracy = evaluator.evaluate(predictions_third_round)
+	print("Test Error = %g " % (1.0 - accuracy))
+	print("Test set accuracy = " + str(accuracy))
+	
+	# 第二轮正确率检测
+	df_true_positive_th = predictions_third_round.where(predictions_third_round.prediction == 1.0)
+	
+	ph_positive_prodict_th = df_true_positive_th.count()
+	print("机器判断第三轮TP条目 = " + str(ph_positive_prodict_th))
+	
+
 
 	
-	df_candidate_third = similarity(df_candidate_third)
-	prediction_third_round = df_candidate_third.where(df_candidate_third.SIMILARITY > 3.0)
-	# prediction_third_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_prediction")
-	ph_positive_predict_th = prediction_third_round.groupBy("id").agg(sum(prediction_third_round.label).alias("right"))
-	ph_positive_predict_th = prediction_third_round.count()
-	ph_positive_hit_th =  ph_positive_predict_th.where(prediction_third_round.right != 0.0).count()
+	# df_candidate_third = similarity(df_candidate_third)
+	# prediction_third_round = df_candidate_third.where(df_candidate_third.SIMILARITY > 3.0)
+	# # prediction_third_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_prediction")
+	# ph_positive_predict_th = prediction_third_round.groupBy("id").agg(sum(prediction_third_round.label).alias("right"))
+	# ph_positive_predict_th = prediction_third_round.count()
+	# ph_positive_hit_th =  ph_positive_predict_th.where(prediction_third_round.right != 0.0).count()
 	
-	print("机器判断模糊数量= " + str(ph_positive_predict_th))
-	print("前五正确数量= " + str(ph_positive_hit_th))
+	# print("机器判断模糊数量= " + str(ph_positive_predict_th))
+	# print("前五正确数量= " + str(ph_positive_hit_th))
 	
 	# 9. 最后一步，给出完全没匹配的结果

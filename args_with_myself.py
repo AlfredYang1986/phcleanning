@@ -44,11 +44,15 @@ def prepare():
 
 	return spark
 
-error_match_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.5/result_analyse/error_match"
-no_label_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.5/result_analyse/no_label"
-accuracy_by_mole_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.5/result_analyse/accuracy_by_mole_path"
-raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/raw_data"
+# error_match_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.6/result_analyse/error_match"
+# no_label_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.6/result_analyse/no_label"
+# accuracy_by_mole_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.6/result_analyse/accuracy_by_mole_path"
+# raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/raw_data"
 
+error_match_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.1/result_analyse/error_match"
+no_label_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.1/result_analyse/no_label"
+accuracy_by_mole_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.1/result_analyse/accuracy_by_mole_path"
+raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/raw_data"
 
 if __name__ == '__main__':
 	spark = prepare()
@@ -129,13 +133,13 @@ if __name__ == '__main__':
 	print("算法前五没有匹配的数据 = " + str(df_result.count()))
 	df_result = df_result.drop("prediction", "prediction_1", "prediction_2", "prediction_3", "prediction_4", "prediction_5").drop("JACCARD_DISTANCE", "features")
 	# df_result.orderBy("id", "RANK").repartition(1).write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/validate/error_match")
-	df_result.orderBy("id", "RANK").repartition(1).write.format("parquet").mode("overwrite").option("header", "true").save(error_match_path)
+	# df_result.orderBy("id", "RANK").repartition(1).write.format("parquet").mode("overwrite").option("header", "true").save(error_match_path)
 	
 	# 3.2 本身就没有pack id的数据，也可能是我在第一步通过简单算法而过滤掉的数据
 	# 本身没有packid 或者匹配出的packid不能为整数 或者机器匹配的packid ！= 人工匹配的packid
 	df_no_label = df_no_label.where(df_no_label.label == 0.0)
 	print("本身没有label的数据 = " + str(df_no_label.count()))
-	df_no_label.orderBy("id").repartition(1).write.format("parquet").mode("overwrite").option("header", "true").save(no_label_path)
+	# df_no_label.orderBy("id").repartition(1).write.format("parquet").mode("overwrite").option("header", "true").save(no_label_path)
 	
 	# df_no_label.orderBy("id").repartition(1).write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/validate/error_label")
 
@@ -169,5 +173,5 @@ if __name__ == '__main__':
 			(df_mole.prediction_1 + df_mole.prediction_2 + df_mole.prediction_3 + df_mole.prediction_4 + df_mole.prediction_5) / df_mole.label)
 	
 	
-	df_mole.repartition(1).write.format("parquet").mode("overwrite").save(accuracy_by_mole_path)
+	# df_mole.repartition(1).write.format("parquet").mode("overwrite").save(accuracy_by_mole_path)
 
