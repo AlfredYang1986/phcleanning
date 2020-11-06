@@ -504,3 +504,17 @@ def prod_name_replace(mole_name, mole_name_standard, mnf_name, mnf_name_standard
 																		(x["MOLE_NAME_STANDARD"] + x["MANUFACTURER_NAME_EN_STANDARD"])))), axis=1)
 	
 	return df["EFFTIVENESS_PROD"]
+	
+@pandas_udf(DoubleType(), PandasUDFType.SCALAR)
+def pack_replace(eff_pack, spec_original, pack_qty, pack_standard):
+	
+	frame = { "EFFTIVENESS_PACK_QTY": eff_pack, "SPEC_ORIGINAL": spec_original,
+			  "PACK_QTY": pack_qty,  "PACK_QTY_STANDARD": pack_standard}
+	df = pd.DataFrame(frame)
+	
+	df["EFFTIVENESS_PACK"] = df.apply(lambda x: 1.0 if ((x["EFFTIVENESS_PACK_QTY"] == 0.0) \
+														& ("喷" in x["PACK_QTY"]) \
+														& (x["PACK_QTY"] in x["SPEC_ORIGINAL"])) \
+											else x["EFFTIVENESS_PACK_QTY"], axis=1)
+	
+	return df["EFFTIVENESS_PACK"]

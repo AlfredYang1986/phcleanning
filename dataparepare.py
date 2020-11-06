@@ -20,12 +20,12 @@ from pyspark.sql.types import *
 
 # raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/azsanofi_check"
 # raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/raw_data"
-# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.4/splitdata"
-# training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.4/tmp/data3"
+# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.1/splitdata"
+# training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.1/tmp/data3"
 
 raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/raw_data"
-split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.4/splitdata"
-training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.4/tmp/data3"
+split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.5/splitdata"
+training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.5/tmp/data3"
 
 
 """
@@ -144,7 +144,7 @@ def load_interfere_mapping(spark):
 读取剂型替换表
 """
 def load_dosage_mapping(spark):
-	df_dosage_mapping = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/cpa_dosage_mapping/cpa_dosage_lst")
+	df_dosage_mapping = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/cpa_dosage_mapping1/cpa_dosage_lst")
 	return df_dosage_mapping
 
 
