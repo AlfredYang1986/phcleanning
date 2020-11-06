@@ -152,8 +152,8 @@ def load_dosage_mapping(spark):
 	Load CrossJoin
 """
 def load_training_data(spark):
-	 return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data2") # pifer
-	 #return spark.read.parquet(training_data_path)
+	 #return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/data2") # pifer
+	 return spark.read.parquet(training_data_path)
 	 #return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.2/tmp/data3") # az
 	 #return spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.1/tmp/data3") # az
 

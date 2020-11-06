@@ -14,6 +14,7 @@ from pyspark.sql import SparkSession
 from dataparepare import *
 from interfere import *
 from pdu_feature import *
+from pyspark.ml import PipelineModel
 
 
 def prepare():
@@ -52,10 +53,16 @@ if __name__ == '__main__':
 	# 		.drop("JACCARD_DISTANCE", "features")
 	print(df.count())
 	df_r = df.select("id","label", "features", "rawPrediction", "probability", "prediction").where((df.label == 1.0) & (df.prediction == 1.0))
-	# df_r.show(1000, truncate=False)
+	df_r.show(1000, truncate=False)
 	print(df_r.count())
 	df_f = df.select("id","label", "features", "rawPrediction", "probability", "prediction").where((df.label == 1.0) & (df.prediction == 0.0))
-	# df_f.show(1000, truncate=False)
+	df_f.show(1000, truncate=False)
 	print(df_f.count())
 
-	# df = df.orderBy("id").drop("features").repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/validate")
+	# df_t = df.select("id", "label", "features")
+	# model = PipelineModel.load("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/dt")
+	# df_t = model.transform(df_t)
+	# df_t = df_t.select("id","label", "features", "rawPrediction", "probability", "prediction").where((df_t.label == 1.0) & (df_t.prediction == 0.0))
+	# df_t.show(1000, truncate=False)
+	# print(df_t.count())
+
