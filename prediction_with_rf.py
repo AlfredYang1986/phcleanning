@@ -1,6 +1,12 @@
 # -*- coding: utf-8 -*-
 """alfredyang@pharbers.com.
 
+功能描述：job3：left join cpa和prod
+  * @author yzy
+  * @version 0.0
+  * @since 2020/08/12
+  * @note  落盘数据：cpa_prod_join
+
 """
 
 import os
@@ -12,6 +18,8 @@ from pyspark.sql.functions import desc
 from pyspark.sql.functions import rank
 from pyspark.sql import Window
 from pyspark.ml.linalg import Vectors, VectorUDT
+from pyspark.ml.classification import MultilayerPerceptronClassificationModel
+from pyspark.ml.classification import DecisionTreeClassificationModel
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.ml import PipelineModel
 from pdu_feature import similarity, hit_place_prediction, dosage_replace, prod_name_replace, pack_replace
@@ -49,8 +57,7 @@ if __name__ == '__main__':
 	spark = prepare()
 
 	# 1. load the data
-	df_result = load_training_data(spark)  # 待清洗数据
-	# df_result.printSchema()
+	df_result = load_training_data(spark)
 	df_validate = df_result #.select("id", "label", "features").orderBy("id")
 
 	# 2. load model
@@ -58,10 +65,6 @@ if __name__ == '__main__':
 
 	# 3. compute accuracy on the test set
 	predictions = model.transform(df_validate)
-
-	# predictions.where((predictions.label == 1.0) & (predictions.prediction == 0.0)).show(truncate=False)
-	# predictions.where((predictions.label == 1.0) & (predictions.prediction == 0.0)).select("id", "label", "probability", "prediction").show(truncate=False)
-	# predictions.where((predictions.label == 1.0) & (predictions.prediction == 1.0)).select("id", "label", "probability", "prediction").show(truncate=False)
 	evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
 	accuracy = evaluator.evaluate(predictions)
 	print("Test Error = %g " % (1.0 - accuracy))
@@ -87,7 +90,6 @@ if __name__ == '__main__':
 	print("机器判断第一轮TP条目 = " + str(ph_positive_prodict))
 	ph_positive_hit = result.where((result.prediction == result.label) & (result.label == 1.0)).count()
 	print("其中正确条目 = " + str(ph_positive_hit))
-
 	# ph_negetive_hit = result.where(result.prediction != result.label).count()
 	if ph_positive_prodict == 0:
 		print("Pharbers Test set accuracy （机器判断第一轮TP比例） = 0")
@@ -185,6 +187,11 @@ if __name__ == '__main__':
 	df_candidate_third = result.where(~result.id.isin(id_local_total))
 	count_third = df_candidate_third.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
 	print("第三轮总量= " + str(count_third))
+	id_local_total = id_local_se + id_local
+	print(len(id_local_total))
+	df_candidate_third = result.where(~result.id.isin(id_local_total))
+	count_third = df_candidate_third.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
+	print("第三轮总量= " + str(count_third))
 
   df_third_round = df_candidate_third.drop("prediction", "indexedLabel", "indexedFeatures", "rawPrediction", "probability", "features")
 	dosage_mapping = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/cpa_dosage_mapping/cpa_dosage_lst")
@@ -214,4 +221,8 @@ if __name__ == '__main__':
 	df_true_positive_th = predictions_third_round.where(predictions_third_round.prediction == 1.0)
 	
 	ph_positive_prodict_th = df_true_positive_th.count()
+<<<<<<<<< saved version
+
+=========
 	print("机器判断第三轮TP条目 = " + str(ph_positive_prodict_th))
+>>>>>>>>> local version

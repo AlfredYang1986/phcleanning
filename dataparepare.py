@@ -23,10 +23,17 @@ from pyspark.sql.types import *
 # split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.1/splitdata"
 # training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.1/tmp/data3"
 
-raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/raw_data"
-split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.6/splitdata"
-training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.6/tmp/data3"
+# raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/raw_data"
+# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.6/splitdata"
+# training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.6/tmp/data3"
 
+# raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/az/raw_data"
+# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/az/0.0.1/splitdata"
+# training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/az/0.0.1/tmp/data3"
+
+raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pf/raw_data"
+split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pf/0.0.1/splitdata"
+training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pf/0.0.1/tmp/data3"
 
 """
 读取标准表WW

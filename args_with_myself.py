@@ -59,7 +59,7 @@ if __name__ == '__main__':
 
 	df_result = load_training_data(spark)
 	df_result = similarity(df_result)
-	df_result.printSchema()
+	# df_result.printSchema()
 	# download_prod_standard(spark)
 	
 	# 0. check the result
@@ -79,7 +79,6 @@ if __name__ == '__main__':
 	print("丢失数据 = " + str(lost_data.count()))
 	df_prod = load_standard_prod(spark)
 	lost_data = lost_data.join(df_prod, df_prod.PACK_ID_STANDARD.cast("int") == lost_data.PACK_ID_CHECK.cast("int"), how="left")
-	print(lost_data.count())
 
 	# 2. count the right hit number
 	# 2.1 first hit
@@ -106,11 +105,35 @@ if __name__ == '__main__':
 	df_result = hit_place_prediction(df_result, 5)
 	positive_hit_5 = df_result.where((df_result.prediction_5 == df_result.label) & (df_result.label == 1.0)).count()
 	print("第五正确匹配pack id 数量 = " + str(positive_hit_5))
-
+	
+	# 前五正确总数
+	positive_hits = df_result.where(((df_result.prediction_1 == df_result.label) & (df_result.label == 1.0)) \
+									| ((df_result.prediction_2 == df_result.label) & (df_result.label == 1.0)) \
+									| ((df_result.prediction_3 == df_result.label) & (df_result.label == 1.0)) \
+									| ((df_result.prediction_4 == df_result.label) & (df_result.label == 1.0)) \
+									| ((df_result.prediction_5 == df_result.label) & (df_result.label == 1.0))).drop("features", "JACCARD_DISTANCE")
+	total_positive_hits = positive_hits.count()
+	print("前五正确总数 = " + str(total_positive_hits))
+	positive_hits.repartition(1).write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pf/0.0.1/pf_right")
+	# positive_hits.write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pf/0.0.1/pf_right")
+	# xixi1=positive_hits.toPandas()
+	# xixi1.to_excel('az_right.xlsx', index = False)
+	
+	# 前五没有匹配上的数据：
+	positive_hits = positive_hits.select("id").distinct()
+	id_local = positive_hits.toPandas()["id"].tolist()  # list的内容前五匹配出来的数据的id
+	df_machine_wrong = df_result.where(~df_result.id.isin(id_local)).drop("features", "JACCARD_DISTANCE")
+	print(df_machine_wrong.count())
+	df_machine_wrong_number = df_machine_wrong.groupBy("id").agg({"RANK": "first", "label": "first"}).count()
+	print("前五匹配错误的数据= " + str(df_machine_wrong_number))
+	df_machine_wrong.repartition(1).write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pf/0.0.1/pf_wrong")
+	# xixi1=df_machine_wrong.toPandas()
+	# xixi1.to_excel('az_wrong.xlsx', index = False)
+ 
 	# 2.6 count the accurcy of right hit number
 	
-	print("正确匹配pack id 率 = " + str((positive_hit_1 + positive_hit_2 + positive_hit_3 + positive_hit_4 + positive_hit_5) / total_count))
-	print("在有pack id的数据中，正确匹配pack id 率 = " + str((positive_hit_1 + positive_hit_2 + positive_hit_3 + positive_hit_4 + positive_hit_5) / total_hit))
+	print("正确匹配pack id 率 = " + str(total_positive_hits / total_count))
+	print("在有pack id的数据中，正确匹配pack id 率 = " + str(total_positive_hits / total_hit))
 
 
 	# 3. not_match label & record the validata dataaa
