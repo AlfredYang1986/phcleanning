@@ -136,7 +136,7 @@ if __name__ == '__main__':
 	# df_standard.select("MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_WORDS", "MANUFACTURER_NAME_EN_STANDARD", "MANUFACTURER_NAME_EN_WORDS").show(truncate=False)
 
 	# 4. 分词之后构建词库编码
-	df_standard.show(truncate=False)
+	# df_standard.show(truncate=False)
 
 	# 4.1 stop word remover 去掉不需要的词
 	stopWords = ["股份", "有限", "总公司", "公司", "集团", "制药", "总厂", "厂", "药业", "责任", "健康", "科技", "生物", "工业", "保健", "医药", "(", ")", "（", "）", \
@@ -191,3 +191,14 @@ if __name__ == '__main__':
 	df_words_cn_dic_encoder = df_words_cn_dic_encoder.withColumn("GEO_ENCODE", when(df_words_cn_dic_encoder.GEO_ENCODE > 0, 1000 + df_words_cn_dic_encoder.GEO_ENCODE).otherwise(-1)) \
 														.select("WORD", "GEO_ENCODE")
 	df_words_cn_dic_encoder.show()
+
+	# 6. 国家编码的问题
+	df_country_standard = spark.read.csv(path="s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/district/COUNTRY_NAME.csv", header=True) \
+								.repartition(1).withColumn("ID", monotonically_increasing_id())
+	df_words_cn_dic_encoder = df_words_cn_dic_encoder.join(df_country_standard, df_words_cn_dic_encoder.WORD == df_country_standard.COUNTRY_CN_NAME, how="left")
+	df_words_cn_dic_encoder	= df_words_cn_dic_encoder.withColumn("COUNTRY_ENCODE", df_words_cn_dic_encoder.ID.cast(IntegerType())).na.fill(-1.0)
+	df_words_cn_dic_encoder = df_words_cn_dic_encoder.select("WORD", "GEO_ENCODE", "COUNTRY_ENCODE")
+	df_words_cn_dic_encoder.show()
+
+	# 7. 高分编码问题
+	# 以后在添加拼音等问题
