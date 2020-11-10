@@ -241,8 +241,8 @@ def efftiveness_with_jaro_winkler_similarity(mo, ms, po, ps, do, ds, so, ss, qo,
 	df["DOSAGE_JWS"] = df.apply(lambda x: 1 if x["DOSAGE"] in x ["DOSAGE_STANDARD"] \
 										else 1 if x["DOSAGE_STANDARD"] in x ["DOSAGE"] \
 										else jaro_winkler_similarity(x["DOSAGE"], x["DOSAGE_STANDARD"]), axis=1)
-	df["SPEC_JWS"] = df.apply(lambda x: 1 if x["SPEC"] in x ["SPEC_STANDARD"] \
-										else 1 if x["SPEC_STANDARD"] in x ["SPEC"] \
+	df["SPEC_JWS"] = df.apply(lambda x: 1 if x["SPEC"].strip() in x ["SPEC_STANDARD"].strip() \
+										else 1 if x["SPEC_STANDARD"].strip() in x ["SPEC"].strip() \
 										else jaro_winkler_similarity(x["SPEC"].strip(), x["SPEC_STANDARD"].strip()), axis=1)
 	df["PACK_QTY_JWS"] = df.apply(lambda x: 1 if x["PACK_QTY"].replace(".0", "") == x["PACK_QTY_STANDARD"].replace(".0", "") \
 										else jaro_winkler_similarity(x["PACK_QTY"].replace(".0", ""), x["PACK_QTY_STANDARD"].replace(".0", "")), axis=1)
@@ -269,6 +269,7 @@ def efftiveness_with_jaro_winkler_similarity(mo, ms, po, ps, do, ds, so, ss, qo,
 @pandas_udf(StringType(), PandasUDFType.SCALAR)
 def transfer_unit_pandas_udf(value):
 	def unit_transform(spec_str):
+		spec_str = spec_str.replace(" ", "")
 		# 拆分数字和单位
 		digit_regex = '\d+\.?\d*e?-?\d*?'
 		# digit_regex = '0.\d*'
@@ -285,7 +286,7 @@ def transfer_unit_pandas_udf(value):
 				# value transform
 				if unit == "G" or unit == "GM":
 					value = value *1000
-				elif unit == "UG":
+				elif unit == "UG" or unit == "UG/DOS":
 					value = value /1000
 				elif unit == "L":
 					value = value *1000
@@ -293,6 +294,8 @@ def transfer_unit_pandas_udf(value):
 					value = value *10000
 				elif unit == "MU" or unit == "MIU" or unit == "M":
 					value = value *1000000
+				elif (unit == "Y"):
+					value = value /1000
 
 				# unit transform
 				unit_switch = {
@@ -309,6 +312,7 @@ def transfer_unit_pandas_udf(value):
 						"MU": "U",
 						"MIU": "U",
 						"M": "U",
+						"Y": "MG",
 					}
 				try:
 					unit = unit_switch[unit]
@@ -360,6 +364,7 @@ def spec_standify(df):
 	df = df.withColumn("SPEC", regexp_replace("SPEC", r"(万)", "T"))
 	df = df.withColumn("SPEC", regexp_replace("SPEC", r"(μ)", "U"))
 	df = df.withColumn("SPEC", upper(df.SPEC))
+	df = df.replace(" ", "")
 	# df = df.withColumn("SPEC_gross", regexp_extract('SPEC', spec_regex, 2))
 	# 拆分规格的成分
 	df = df.withColumn("SPEC_percent", regexp_extract('SPEC', r'(\d+%)', 1))
@@ -368,7 +373,12 @@ def spec_standify(df):
 	df = df.withColumn("SPEC_valid", regexp_extract('SPEC', spec_valid_regex, 1))
 	spec_gross_regex =  r'([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)[ /:∶+\s]([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)'
 	df = df.withColumn("SPEC_gross", regexp_extract('SPEC', spec_gross_regex, 2))
-
+	spec_third_regex = r'([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)[ /:∶+\s]([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)[ /:∶+\s]([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)'
+	df = df.withColumn("SPEC_third", regexp_extract('SPEC', spec_third_regex, 3))
+	
+	pure_number_regex_spec = r'(\s\d+$)'
+	df = df.withColumn("SPEC_pure_number", regexp_extract('SPEC', pure_number_regex_spec, 1))
+	
 	digit_regex_spec = r'(\d+\.?\d*e?-?\d*?)'
 	df = df.withColumn("SPEC_gross_digit", regexp_extract('SPEC_gross', digit_regex_spec, 1))
 	df = df.withColumn("SPEC_gross_unit", regexp_replace('SPEC_gross', digit_regex_spec, ""))
@@ -377,11 +387,12 @@ def spec_standify(df):
 
 	df = df.withColumn("SPEC_valid", transfer_unit_pandas_udf(df.SPEC_valid))
 	df = df.withColumn("SPEC_gross", transfer_unit_pandas_udf(df.SPEC_gross))
+	df.show()
 	df = df.drop("SPEC_gross_digit", "SPEC_gross_unit", "SPEC_valid_digit", "SPEC_valid_unit")
 	df = df.withColumn("SPEC_percent", percent_pandas_udf(df.SPEC_percent, df.SPEC_valid, df.SPEC_gross))
 	df = df.withColumn("SPEC_ept", lit(" "))
-	df = df.withColumn("SPEC", concat("SPEC_co", "SPEC_percent", "SPEC_ept", "SPEC_valid", "SPEC_ept", "SPEC_gross")) \
-					.drop("SPEC_percent", "SPEC_co", "SPEC_valid", "SPEC_gross", "SPEC_ept")
+	df = df.withColumn("SPEC", concat( "SPEC_percent", "SPEC_ept", "SPEC_valid", "SPEC_ept", "SPEC_gross", "SPEC_ept", "SPEC_third", "SPEC_co")) \
+					.drop("SPEC_percent", "SPEC_co", "SPEC_valid", "SPEC_gross", "SPEC_ept", "SPEC_pure_number", "SPEC_third")
 	return df
 
 

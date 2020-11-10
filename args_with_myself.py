@@ -111,24 +111,17 @@ if __name__ == '__main__':
 									| ((df_result.prediction_2 == df_result.label) & (df_result.label == 1.0)) \
 									| ((df_result.prediction_3 == df_result.label) & (df_result.label == 1.0)) \
 									| ((df_result.prediction_4 == df_result.label) & (df_result.label == 1.0)) \
-									| ((df_result.prediction_5 == df_result.label) & (df_result.label == 1.0))).drop("features", "JACCARD_DISTANCE")
+									| ((df_result.prediction_5 == df_result.label) & (df_result.label == 1.0)))
 	total_positive_hits = positive_hits.count()
 	print("前五正确总数 = " + str(total_positive_hits))
-	positive_hits.repartition(1).write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pf/0.0.1/pf_right")
-	# positive_hits.write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pf/0.0.1/pf_right")
-	# xixi1=positive_hits.toPandas()
-	# xixi1.to_excel('az_right.xlsx', index = False)
 	
 	# 前五没有匹配上的数据：
 	positive_hits = positive_hits.select("id").distinct()
 	id_local = positive_hits.toPandas()["id"].tolist()  # list的内容前五匹配出来的数据的id
-	df_machine_wrong = df_result.where(~df_result.id.isin(id_local)).drop("features", "JACCARD_DISTANCE")
+	df_machine_wrong = df_result.where(~df_result.id.isin(id_local))
 	print(df_machine_wrong.count())
 	df_machine_wrong_number = df_machine_wrong.groupBy("id").agg({"RANK": "first", "label": "first"}).count()
 	print("前五匹配错误的数据= " + str(df_machine_wrong_number))
-	df_machine_wrong.repartition(1).write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pf/0.0.1/pf_wrong")
-	# xixi1=df_machine_wrong.toPandas()
-	# xixi1.to_excel('az_wrong.xlsx', index = False)
  
 	# 2.6 count the accurcy of right hit number
 	

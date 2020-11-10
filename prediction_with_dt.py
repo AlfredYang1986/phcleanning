@@ -9,7 +9,7 @@ from dataparepare import *
 from interfere import *
 from pyspark.sql.types import *
 from pyspark.sql.functions import desc
-from pyspark.sql.functions import rank
+from pyspark.sql.functions import rank, lit
 from pyspark.sql import Window
 from pyspark.ml.linalg import Vectors, VectorUDT
 from pyspark.ml.classification import MultilayerPerceptronClassificationModel
@@ -82,7 +82,8 @@ if __name__ == '__main__':
 
 	# 5. 尝试解决多高的问题
 	df_true_positive = similarity(result.where(result.prediction == 1.0))
-	df_true_positive = df_true_positive.where(df_true_positive.RANK == 1)
+	machine_right_1 = df_true_positive
+	# df_true_positive = df_true_positive.where(df_true_positive.RANK == 1)
 
 	ph_positive_prodict = df_true_positive.count()
 	print("机器判断第一轮TP条目 = " + str(ph_positive_prodict))
@@ -148,7 +149,7 @@ if __name__ == '__main__':
 	
 	# 第二轮正确率检测
 	df_true_positive_se = predictions_second_round.where(predictions_second_round.prediction == 1.0)
-	
+	machine_right_2 = df_true_positive_se
 	ph_positive_prodict_se = df_true_positive_se.count()
 	print("机器判断第二轮TP条目 = " + str(ph_positive_prodict_se))
 	ph_positive_hit_se = df_true_positive_se.where((df_true_positive_se.prediction == df_true_positive_se.label) & (df_true_positive_se.label == 1.0)).count()
@@ -160,6 +161,16 @@ if __name__ == '__main__':
 	else:
 		print("Pharbers Test set accuracy （机器判断第二轮TP比例） = " + str(ph_positive_hit_se / count_prediction_se))
 		print("Pharbers Test set precision （机器判断第二轮TP正确率） = " + str(ph_positive_hit_se / ph_positive_prodict_se))
+
+	# 两轮合并整理成表格
+	machine_right_1 = machine_right_1.drop("indexedLabel", "JACCARD_DISTANCE_DOSAGE", "JACCARD_DISTANCE_MOLE_NAME", "SIMILARITY", "RANK")
+	machine_right_2 = machine_right_2.drop("indexedLabel", "JACCARD_DISTANCE_DOSAGE", "JACCARD_DISTANCE_MOLE_NAME", "SIMILARITY", "RANK", "features", \
+									"EFFTIVENESS_PRODUCT_NAME_SE", "EFFTIVENESS_DOSAGE_SE", "EFFTIVENESS_PACK_QTY_SE", "indexedFeatures", "rawPrediction", "probability")
+	machine_right_1.printSchema()
+	machine_right_2.printSchema()
+	machine_right = machine_right_1.unionByName(machine_right_2)
+	xixi1=machine_right.toPandas()
+	xixi1.to_excel('pf_true_positive.xlsx', index = False)
 
 	# 7. 两轮估算总量
 	ph_positive_prodict = ph_positive_prodict + ph_positive_prodict_se
@@ -202,39 +213,6 @@ if __name__ == '__main__':
 	
 	print("机器判断模糊数量= " + str(ph_positive_predict_th))
 	print("前五正确数量= " + str(ph_positive_hit_th))
-	
-	# df_third_round = df_candidate_third.drop("prediction", "indexedLabel", "indexedFeatures", "rawPrediction", "probability", "features")
-	# dosage_mapping = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/cpa_dosage_mapping/cpa_dosage_lst")
-	# df_third_round.show(5)
-	# df_third_round = df_third_round.join(dosage_mapping, df_third_round.DOSAGE == dosage_mapping.CPA_DOSAGE, how="left").na.fill("")
-	# df_third_round = df_third_round.withColumn("EFFTIVENESS_DOSAGE_TH", dosage_replace(df_third_round.MASTER_DOSAGE, \
-	# 													df_third_round.DOSAGE_STANDARD, df_third_round.EFFTIVENESS_DOSAGE)) 
-	# df_third_round = df_third_round.withColumn("EFFTIVENESS_PRODUCT_NAME_SE", prod_name_replace(df_third_round.MOLE_NAME, df_third_round.MOLE_NAME_STANDARD, \
-	# 													df_third_round.MANUFACTURER_NAME, df_third_round.MANUFACTURER_NAME_STANDARD, df_third_round.MANUFACTURER_NAME_EN_STANDARD))
-	
-	# assembler = VectorAssembler( \
-	# 			inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_PRODUCT_NAME_SE", "EFFTIVENESS_DOSAGE_TH", "EFFTIVENESS_SPEC", \
-	# 						"EFFTIVENESS_PACK_QTY", "EFFTIVENESS_MANUFACTURER"], \
-	# 			outputCol="features")
-	# df_third_round = assembler.transform(df_third_round)
-	# # df_second_round.repartition(10).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/second_round_dt")
-	
-	# predictions_third_round = model.transform(df_third_round)
-	# predictions_third_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_prediction_2")
-	# evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
-	# accuracy = evaluator.evaluate(predictions_third_round)
-	# print("Test Error = %g " % (1.0 - accuracy))
-	# print("Test set accuracy = " + str(accuracy))
-	
-	# # 第二轮正确率检测
-	# df_true_positive_th = predictions_third_round.where(predictions_third_round.prediction == 1.0)
-	
-	# ph_positive_prodict_th = df_true_positive_th.count()
-	# print("机器判断第三轮TP条目 = " + str(ph_positive_prodict_th))
-	
-
-
-	
 	
 	
 	# 9. 最后一步，给出完全没匹配的结果
