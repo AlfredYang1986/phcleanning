@@ -16,6 +16,7 @@ from pyspark.sql.functions import udf
 from pyspark.sql.functions import when
 from pyspark.sql.functions import first
 from pyspark.sql.functions import array
+from pyspark.sql.functions import to_json
 from pyspark.ml.linalg import Vectors, VectorUDT
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.feature import HashingTF, IDF, Tokenizer
@@ -168,7 +169,11 @@ if __name__ == '__main__':
 							# .withColumn("features_mnf_cn", df_result.features_mnf_cn.toArray())
 
 	# 6. 直接是用cosine similarity 不要用机器学习 多此一举
-	df_result = df_result.limit(100).withColumn("CONSINE_SIMILARITY", cosine_distance_between_mnf(array(df_result.features_mnf_cn, df_result.features_mnf_cn_standard)))
-	df_result.select("id", "label", "MANUFACTURER_NAME", "MANUFACTURER_NAME_STANDARD", "CONSINE_SIMILARITY", "EFFTIVENESS_MANUFACTURER").show()
-	df_result.select("id", "label", "MANUFACTURER_NAME", "MANUFACTURER_NAME_STANDARD", "EFFTIVENESS_MANUFACTURER", "features_mnf_cn_standard", "features_mnf_cn").show(truncate=False)
+	# df_result = df_result.withColumn("features_mnf_cn", to_json(df_result.features_mnf_cn))
+	# df_result = df_result.withColumn("features_mnf_cn_standard", to_json(df_result.features_mnf_cn_standard))
+	# df_result.show()
 
+	df_result = df_result.repartition(800).withColumn("CONSINE_SIMILARITY", cosine_distance_between_mnf(array(df_result.features_mnf_cn, df_result.features_mnf_cn_standard)))
+	df_result = df_result.drop("features_mnf_cn_standard", "features_mnf_cn", "MANUFACTURER_NAME_WORDS", "MANUFACTURER_NAME_EN_WORDS", "features", "SPEC_ORIGINAL", "JACCARD_DISTANCE", "SPEC_STANDARD_ORIGINAL")
+	df_result.printSchema()
+	df_result.write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/cosine_similarity")
