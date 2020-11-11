@@ -118,7 +118,7 @@ if __name__ == '__main__':
 	# 前五没有匹配上的数据：
 	positive_hits = positive_hits.select("id").distinct()
 	id_local = positive_hits.toPandas()["id"].tolist()  # list的内容前五匹配出来的数据的id
-	df_machine_wrong = df_result.where(~df_result.id.isin(id_local))
+	df_machine_wrong = df_result.where(~df_result.id.isin(id_local)).drop("features", "JACCARD_DISTANCE")
 	print(df_machine_wrong.count())
 	df_machine_wrong_number = df_machine_wrong.groupBy("id").agg({"RANK": "first", "label": "first"}).count()
 	print("前五匹配错误的数据= " + str(df_machine_wrong_number))

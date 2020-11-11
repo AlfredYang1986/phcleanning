@@ -29,27 +29,27 @@ from nltk.metrics import jaccard_distance as jd
 # from nltk.metrics import jaro_winkler_similarity as jws
 
 
-def dosage_standify(df, df_dosage_mapping):
+def dosage_standify(df):
 	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"（注射剂）", ""))
 	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"（粉剂针）", ""))
 	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"（胶丸、滴丸）", ""))
 
-	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"SOLN", "注射液"))
-	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"POWD", "粉针剂"))
-	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"SUSP", "混悬"))
-	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"OINT", "膏剂"))
-	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"NA", "鼻"))
-	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"SYRP", "口服"))
-	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"PATC", "贴膏"))
-	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"EMUL", "乳"))
-	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"AERO", "气雾"))
-	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"RAN", "颗粒"))
-	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"SUPP", "栓"))
-	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"PILL", "丸"))
-	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"MISC", "混合"))
-	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"LIQD", "溶液"))
-	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"TAB", "片"))
-	df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"CAP", "胶囊"))
+	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"SOLN", "注射液"))
+	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"POWD", "粉针剂"))
+	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"SUSP", "混悬"))
+	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"OINT", "膏剂"))
+	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"NA", "鼻"))
+	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"SYRP", "口服"))
+	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"PATC", "贴膏"))
+	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"EMUL", "乳"))
+	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"AERO", "气雾"))
+	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"RAN", "颗粒"))
+	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"SUPP", "栓"))
+	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"PILL", "丸"))
+	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"MISC", "混合"))
+	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"LIQD", "溶液"))
+	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"TAB", "片"))
+	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"CAP", "胶囊"))
 	
 	# cross join (only Chinese)
 	# df_dosage = df.crossJoin(df_dosage_mapping.select("CPA_DOSAGE", "MASTER_DOSAGE").distinct())
@@ -241,11 +241,13 @@ def efftiveness_with_jaro_winkler_similarity(mo, ms, po, ps, do, ds, so, ss, qo,
 	df["DOSAGE_JWS"] = df.apply(lambda x: 1 if x["DOSAGE"] in x ["DOSAGE_STANDARD"] \
 										else 1 if x["DOSAGE_STANDARD"] in x ["DOSAGE"] \
 										else jaro_winkler_similarity(x["DOSAGE"], x["DOSAGE_STANDARD"]), axis=1)
-	df["SPEC_JWS"] = df.apply(lambda x: 1 if x["SPEC"].strip() in x ["SPEC_STANDARD"].strip() \
-										else 1 if x["SPEC_STANDARD"].strip() in x ["SPEC"].strip() \
+	df["SPEC_JWS"] = df.apply(lambda x: 1 if x["SPEC"].strip() ==  x["SPEC_STANDARD"].strip() \
+										else 0 if ((x["SPEC"].strip() == "") or (x["SPEC_STANDARD"].strip() == "")) \
+										else 1 if x["SPEC"].strip() in x["SPEC_STANDARD"].strip() \
+										else 1 if x["SPEC_STANDARD"].strip() in x["SPEC"].strip() \
 										else jaro_winkler_similarity(x["SPEC"].strip(), x["SPEC_STANDARD"].strip()), axis=1)
 	df["PACK_QTY_JWS"] = df.apply(lambda x: 1 if x["PACK_QTY"].replace(".0", "") == x["PACK_QTY_STANDARD"].replace(".0", "") \
-										else jaro_winkler_similarity(x["PACK_QTY"].replace(".0", ""), x["PACK_QTY_STANDARD"].replace(".0", "")), axis=1)
+										else 0, axis=1)
 	df["MANUFACTURER_NAME_CH_JWS"] = df.apply(lambda x: 1 if x["MANUFACTURER_NAME"] in x ["MANUFACTURER_NAME_STANDARD"] \
 										else 1 if x["MANUFACTURER_NAME_STANDARD"] in x ["MANUFACTURER_NAME"] \
 										else jaro_winkler_similarity(x["MANUFACTURER_NAME"], x["MANUFACTURER_NAME_STANDARD"]), axis=1)
@@ -391,7 +393,7 @@ def spec_standify(df):
 	df = df.drop("SPEC_gross_digit", "SPEC_gross_unit", "SPEC_valid_digit", "SPEC_valid_unit")
 	df = df.withColumn("SPEC_percent", percent_pandas_udf(df.SPEC_percent, df.SPEC_valid, df.SPEC_gross))
 	df = df.withColumn("SPEC_ept", lit(" "))
-	df = df.withColumn("SPEC", concat( "SPEC_percent", "SPEC_ept", "SPEC_valid", "SPEC_ept", "SPEC_gross", "SPEC_ept", "SPEC_third", "SPEC_co")) \
+	df = df.withColumn("SPEC", concat( "SPEC_percent", "SPEC_valid", "SPEC_gross", "SPEC_third")) \
 					.drop("SPEC_percent", "SPEC_co", "SPEC_valid", "SPEC_gross", "SPEC_ept", "SPEC_pure_number", "SPEC_third")
 	return df
 
