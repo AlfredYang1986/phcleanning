@@ -134,9 +134,9 @@ if __name__ == '__main__':
 	# df_standard.show(truncate=False)
 
 	# 4.1 stop word remover 去掉不需要的词
-	stopWords = ["股份", "有限", "总公司", "公司", "集团", "制药", "总厂", "厂", "药业", "责任", "健康", "科技", "生物", "工业", "保健", "医药", "(", ")", "（", "）", \
+	stopWords = ["股份", "有限", "总公司", "公司", "集团", "制药", "总厂", "厂", "药业", "责任", "医药", "(", ")", "（", "）", \
 				 "有限公司", "股份", "控股", "集团", "总公司", "总厂", "厂", "责任", "公司", "有限", "有限责任", \
-			     "药业", "医药", "制药", "控股集团", "医药集团", "控股集团", "集团股份", "生物医药", "药厂", "分公司"]
+			     "药业", "医药", "制药", "控股集团", "医药集团", "控股集团", "集团股份", "药厂", "分公司"]
 	remover = StopWordsRemover(stopWords=stopWords, inputCol="MANUFACTURER_NAME_WORDS", outputCol="MANUFACTURER_NAME_WORDS_FILTER")
 
 	df_words_cn = df_standard.select("MANUFACTURER_NAME_WORDS")

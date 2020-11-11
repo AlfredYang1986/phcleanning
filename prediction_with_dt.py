@@ -159,8 +159,7 @@ if __name__ == '__main__':
 	print("其中正确条目 = " + str(ph_positive_hit_se))
 	# ph_negetive_hit = result.where(result.prediction != result.label).count()
 	if ph_positive_prodict_se == 0:
-		print("Pharbers Test set accuracy （机器判断第二轮TP比例） = " + str(ph_positive_prodict_se / ph_total))
-		print("Pharbers Test set precision （机器判断第二轮TP正确率） = 0")
+		print("Pharbers Test set accuracy （机器判断第二轮TP比例） = 无" )
 	else:
 		print("Pharbers Test set accuracy （机器判断第二轮TP比例） = " + str(ph_positive_prodict_se / ph_total))
 		print("Pharbers Test set precision （机器判断第二轮TP正确率） = " + str(ph_positive_hit_se / ph_positive_prodict_se))

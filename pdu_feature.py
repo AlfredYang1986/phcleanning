@@ -386,7 +386,7 @@ def spec_standify(df):
 	df = df.withColumn("SPEC_gross_unit", regexp_replace('SPEC_gross', digit_regex_spec, ""))
 	df = df.withColumn("SPEC_valid_digit", regexp_extract('SPEC_valid', digit_regex_spec, 1))
 	df = df.withColumn("SPEC_valid_unit", regexp_replace('SPEC_valid', digit_regex_spec, ""))
-
+	df = df.na.fill("")
 	df = df.withColumn("SPEC_valid", transfer_unit_pandas_udf(df.SPEC_valid))
 	df = df.withColumn("SPEC_gross", transfer_unit_pandas_udf(df.SPEC_gross))
 	df.show()
