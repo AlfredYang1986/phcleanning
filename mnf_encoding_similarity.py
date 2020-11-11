@@ -19,7 +19,6 @@ from pyspark.sql.functions import array
 from pyspark.sql.functions import to_json
 from pyspark.sql.functions import explode
 from pyspark.sql.functions import min
-from pyspark.sql.functions import col
 from pyspark.ml.linalg import Vectors, VectorUDT
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.feature import HashingTF, IDF, Tokenizer
@@ -68,11 +67,30 @@ if __name__ == '__main__':
 	spark = prepare()
 
 	# 1. 利用standard中的中文列通过中文分词
-	df_standard = load_standard_prod(spark)
-	df_words_cn = phcleanning_mnf_seg(df_standard, "MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_WORDS_FILTER")
+	df_cleanning = load_training_data(spark)
+
+	# 3. 中文的分词
+	df_standard = df_standard.withColumn("MANUFACTURER_NAME_WORDS", manifacture_name_pseg_cut(df_standard.MANUFACTURER_NAME_STANDARD))
+	# df_standard.select("MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_WORDS", "MANUFACTURER_NAME_EN_STANDARD", "MANUFACTURER_NAME_EN_WORDS").show(truncate=False)
+
+	# 4. 分词之后构建词库编码
+	# df_standard.show(truncate=False)
+
+	# 4.1 stop word remover 去掉不需要的词
+	stopWords = ["股份", "有限", "总公司", "公司", "集团", "制药", "总厂", "厂", "药业", "责任", "医药", "(", ")", "（", "）", \
+				 "有限公司", "股份", "控股", "集团", "总公司", "总厂", "厂", "责任", "公司", "有限", "有限责任", \
+			     "药业", "医药", "制药", "控股集团", "医药集团", "控股集团", "集团股份", "药厂", "分公司", "-", ".", "-", "·"]
+	remover = StopWordsRemover(stopWords=stopWords, inputCol="MANUFACTURER_NAME_WORDS", outputCol="MANUFACTURER_NAME_WORDS_FILTER")
+
+	df_words_cn = df_standard.select("MANUFACTURER_NAME_WORDS")
+	df_words_cn = remover.transform(df_words_cn)
+	# df_words_cn.show(truncate=False)
 
 	# 4.2 分离地理维度集合
 	df_words_cn_dic = df_words_cn.select(explode("MANUFACTURER_NAME_WORDS_FILTER").alias("WORD")).distinct()
+	# df_words_cn_dic = df_words_cn_dic.withColumn("GEO_TAG", dic_words_to_index(df_words_cn_dic.WORD))
+	# df_words_cn_dic.show()
+	# print(df_words_cn_dic.count())
 
 	# 5. 省市相关编码
 	# 5.1 地理维度的编码
