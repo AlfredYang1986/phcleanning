@@ -14,16 +14,25 @@ from pyspark.sql.functions import pandas_udf
 from pyspark.sql.types import *
 from pyspark.sql.functions import regexp_replace, regexp_extract
 from pyspark.sql.functions import pandas_udf, PandasUDFType
+from pyspark.sql.functions import udf
 from pyspark.sql.functions import upper
 from pyspark.sql.functions import lit
 from pyspark.sql.functions import concat
 from pyspark.sql.functions import desc
 from pyspark.sql.functions import rank
 from pyspark.sql.functions import when
+from pyspark.sql.functions import col
+from pyspark.ml.linalg import Vectors, VectorUDT
+from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.feature import HashingTF, IDF, Tokenizer
+from pyspark.ml.feature import OneHotEncoderEstimator
+from pyspark.ml.feature import StopWordsRemover
 from pyspark.sql import Window
+from math import sqrt
 import re
 import numpy as np
 import pandas as pd
+import pkuseg
 from nltk.metrics import edit_distance as ed
 from nltk.metrics import jaccard_distance as jd
 # from nltk.metrics import jaro_winkler_similarity as jws
@@ -50,7 +59,7 @@ def dosage_standify(df):
 	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"LIQD", "溶液"))
 	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"TAB", "片"))
 	# df = df.withColumn("DOSAGE", regexp_replace("DOSAGE", r"CAP", "胶囊"))
-	
+
 	# cross join (only Chinese)
 	# df_dosage = df.crossJoin(df_dosage_mapping.select("CPA_DOSAGE", "MASTER_DOSAGE").distinct())
 	# df_dosage = df_dosage.withColumn("DOSAGE_SUB", when(df_dosage.DOSAGE.contains(df_dosage.CPA_DOSAGE) | df_dosage.CPA_DOSAGE.contains(df_dosage.DOSAGE), \
@@ -60,7 +69,7 @@ def dosage_standify(df):
 	# df_dosage = df_dosage.unionByName(df.withColumn("DOSAGE_SUB", df.DOSAGE)) \
 	# 			.select("id", "PACK_ID_CHECK", "MOLE_NAME", "PRODUCT_NAME", "DOSAGE", "SPEC", "PACK_QTY", "MANUFACTURER_NAME", "DOSAGE_SUB").distinct()
 	# df_dosage = df_dosage.withColumnRenamed("DOSAGE", "DOSAGE_ORIGINAL").withColumnRenamed("DOSAGE_SUB", "DOSAGE")
-	
+
 	return df
 
 
@@ -377,10 +386,10 @@ def spec_standify(df):
 	df = df.withColumn("SPEC_gross", regexp_extract('SPEC', spec_gross_regex, 2))
 	spec_third_regex = r'([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)[ /:∶+\s]([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)[ /:∶+\s]([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)'
 	df = df.withColumn("SPEC_third", regexp_extract('SPEC', spec_third_regex, 3))
-	
+
 	pure_number_regex_spec = r'(\s\d+$)'
 	df = df.withColumn("SPEC_pure_number", regexp_extract('SPEC', pure_number_regex_spec, 1))
-	
+
 	digit_regex_spec = r'(\d+\.?\d*e?-?\d*?)'
 	df = df.withColumn("SPEC_gross_digit", regexp_extract('SPEC_gross', digit_regex_spec, 1))
 	df = df.withColumn("SPEC_gross_unit", regexp_replace('SPEC_gross', digit_regex_spec, ""))
@@ -409,9 +418,9 @@ def similarity(df):
 	windowSpec = Window.partitionBy("id").orderBy(desc("SIMILARITY"), desc("EFFTIVENESS_MOLE_NAME"), desc("EFFTIVENESS_DOSAGE"), desc("PACK_ID_STANDARD"))
 
 	df = df.withColumn("RANK", rank().over(windowSpec))
-	
+
 	# 写入给彭总
-	
+
 	df = df.where((df.RANK <= 5) | (df.label == 1.0))
 	# df.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.3/result_analyse/all_similarity_rank5")
 	# print("写入完成")
@@ -426,19 +435,19 @@ def hit_place_prediction(df, pos):
 
 @pandas_udf(DoubleType(), PandasUDFType.SCALAR)
 def dosage_replace(dosage_lst, dosage_standard, eff):
-	
+
 	frame = { "MASTER_DOSAGE": dosage_lst, "DOSAGE_STANDARD": dosage_standard, "EFFTIVENESS_DOSAGE": eff }
 	df = pd.DataFrame(frame)
-	
+
 	df["EFFTIVENESS"] = df.apply(lambda x: 1.0 if x["DOSAGE_STANDARD"] in x["MASTER_DOSAGE"] \
 											else x["EFFTIVENESS_DOSAGE"], axis=1)
-	
+
 	return df["EFFTIVENESS"]
-	
-	
+
+
 @pandas_udf(DoubleType(), PandasUDFType.SCALAR)
 def prod_name_replace(mole_name, mole_name_standard, mnf_name, mnf_name_standard, mnf_en_standard):
-	
+
 	def jaro_similarity(s1, s2):
 		# First, store the length of the strings
 		# because they will be re-used several times.
@@ -506,28 +515,102 @@ def prod_name_replace(mole_name, mole_name_standard, mnf_name, mnf_name_standard
 		# Return the similarity value as described in docstring.
 		return jaro_sim + (l * p * (1 - jaro_sim))
 
-	
+
 	frame = { "MOLE_NAME": mole_name, "MOLE_NAME_STANDARD": mole_name_standard,
 			  "MANUFACTURER_NAME": mnf_name, "MANUFACTURER_NAME_STANDARD": mnf_name_standard, "MANUFACTURER_NAME_EN_STANDARD": mnf_en_standard }
 	df = pd.DataFrame(frame)
-	
+
 	df["EFFTIVENESS_PROD"] = df.apply(lambda x: max((jaro_winkler_similarity((x["MOLE_NAME"] + x["MANUFACTURER_NAME"]), \
 																		(x["MOLE_NAME_STANDARD"] + x["MANUFACTURER_NAME_STANDARD"]))), \
 												(jaro_winkler_similarity((x["MOLE_NAME"] + x["MANUFACTURER_NAME"]), \
 																		(x["MOLE_NAME_STANDARD"] + x["MANUFACTURER_NAME_EN_STANDARD"])))), axis=1)
-	
+
 	return df["EFFTIVENESS_PROD"]
-	
+
+
 @pandas_udf(DoubleType(), PandasUDFType.SCALAR)
 def pack_replace(eff_pack, spec_original, pack_qty, pack_standard):
-	
+
 	frame = { "EFFTIVENESS_PACK_QTY": eff_pack, "SPEC_ORIGINAL": spec_original,
 			  "PACK_QTY": pack_qty,  "PACK_QTY_STANDARD": pack_standard}
 	df = pd.DataFrame(frame)
-	
+
 	df["EFFTIVENESS_PACK"] = df.apply(lambda x: 1.0 if ((x["EFFTIVENESS_PACK_QTY"] == 0.0) \
 														& ("喷" in x["PACK_QTY"]) \
 														& (x["PACK_QTY"] in x["SPEC_ORIGINAL"])) \
 											else x["EFFTIVENESS_PACK_QTY"], axis=1)
-	
+
 	return df["EFFTIVENESS_PACK"]
+
+
+@pandas_udf(StringType(), PandasUDFType.SCALAR)
+def manifacture_name_en_standify(en):
+	frame = {
+		"MANUFACTURER_NAME_EN_STANDARD": en,
+	}
+	df = pd.DataFrame(frame)
+
+	# @尹 需要换成regex
+	df["MANUFACTURER_NAME_EN_STANDARD_STANDIFY"] = df["MANUFACTURER_NAME_EN_STANDARD"].apply(lambda x: x.replace(".", " ").replace("-", " "))
+	return df["MANUFACTURER_NAME_EN_STANDARD_STANDIFY"]
+
+
+@pandas_udf(ArrayType(StringType()), PandasUDFType.SCALAR)
+def manifacture_name_pseg_cut(mnf):
+	frame = {
+		"MANUFACTURER_NAME_STANDARD": mnf,
+	}
+	df = pd.DataFrame(frame)
+	lexicon = ["优时比", "省", "市", "第一三共", "诺维诺", "药业", "医药", "在田", "人人康", \
+				"健朗", "鑫威格", "景康", "皇甫谧", "安徽", "江中高邦", "鲁抗", "辰欣", "法玛西亚普强", "正大天晴", "拜耳", "三才"]
+	seg = pkuseg.pkuseg(user_dict=lexicon)
+
+	df["MANUFACTURER_NAME_STANDARD_WORDS"] = df["MANUFACTURER_NAME_STANDARD"].apply(lambda x: seg.cut(x))
+	return df["MANUFACTURER_NAME_STANDARD_WORDS"]
+
+
+@udf
+def cosine_distance_between_mnf(array):
+	u = array[0].toArray()
+	v = array[1].toArray()
+	return float(numpy.dot(u, v) / (sqrt(numpy.dot(u, u)) * sqrt(numpy.dot(v, v))))
+
+
+@pandas_udf(IntegerType(), PandasUDFType.SCALAR)
+def dic_words_to_index(words):
+	frame = {
+		"WORDS": words
+	}
+	df = pd.DataFrame(frame)
+
+
+	def is_geo_tag(w):
+		t = analyse.extract_tags(w, topK=5, withWeight=True, allowPOS=("ns",))
+		if len(t) == 0:
+			return 0
+		else:
+			return 1
+
+	df["GEO_TAG"] = df["WORDS"].apply(lambda x: is_geo_tag(x))
+	return df["GEO_TAG"]
+
+
+def phcleanning_mnf_seg(df_standard, inputCol, outputCol):
+	# 2. 英文的分词方法，tokenizer
+	# 英文先不管
+	# df_standard = df_standard.withColumn("MANUFACTURER_NAME_EN_STANDARD", manifacture_name_en_standify(col("MANUFACTURER_NAME_EN_STANDARD")))
+	# df_standard.select("MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_EN_STANDARD").show(truncate=False)
+	# tokenizer = Tokenizer(inputCol="MANUFACTURER_NAME_EN_STANDARD", outputCol="MANUFACTURER_NAME_EN_WORDS")
+	# df_standard = tokenizer.transform(df_standard)
+
+	# 3. 中文的分词，
+	df_standard = df_standard.withColumn("MANUFACTURER_NAME_WORDS", manifacture_name_pseg_cut(col(inputCol)))
+
+	# 4. 分词之后构建词库编码
+	# 4.1 stop word remover 去掉不需要的词
+	stopWords = ["省", "市", "股份", "有限", "总公司", "公司", "集团", "制药", "总厂", "厂", "药业", "责任", "医药", "(", ")", "（", "）", \
+				 "有限公司", "股份", "控股", "集团", "总公司", "公司", "有限", "有限责任", \
+			     "药业", "医药", "制药", "制药厂", "控股集团", "医药集团", "控股集团", "集团股份", "药厂", "分公司", "-", ".", "-", "·", ":"]
+	remover = StopWordsRemover(stopWords=stopWords, inputCol="MANUFACTURER_NAME_WORDS", outputCol=outputCol)
+
+	return remover.transform(df_standard).drop("MANUFACTURER_NAME_WORDS")

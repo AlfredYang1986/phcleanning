@@ -11,29 +11,13 @@ from dataparepare import *
 from interfere import *
 from pdu_feature import *
 from pyspark.sql.types import *
-from pyspark.sql.functions import pandas_udf
-from pyspark.sql.functions import udf
 from pyspark.sql.functions import when
-from pyspark.sql.functions import first
-from pyspark.sql.functions import array
-from pyspark.sql.functions import to_json
 from pyspark.sql.functions import explode
 from pyspark.sql.functions import min
-from pyspark.ml.linalg import Vectors, VectorUDT
-from pyspark.ml.feature import VectorAssembler
-from pyspark.ml.feature import HashingTF, IDF, Tokenizer
-from pyspark.ml.feature import OneHotEncoderEstimator
 from pyspark.ml import Pipeline
-from pyspark.ml.classification import DecisionTreeClassifier
-from pyspark.ml.feature import StringIndexer, VectorIndexer, StopWordsRemover
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 import pandas as pd
 import numpy
-from math import sqrt
-import pkuseg
-import jieba
-import jieba.posseg as pseg
-import jieba.analyse as analyse
 
 
 def prepare():
@@ -63,91 +47,15 @@ def prepare():
 	return spark
 
 
-@pandas_udf(StringType(), PandasUDFType.SCALAR)
-def manifacture_name_en_standify(en):
-	frame = {
-		"MANUFACTURER_NAME_EN_STANDARD": en,
-	}
-	df = pd.DataFrame(frame)
-
-	# @尹 需要换成regex
-	df["MANUFACTURER_NAME_EN_STANDARD_STANDIFY"] = df["MANUFACTURER_NAME_EN_STANDARD"].apply(lambda x: x.replace(".", " ").replace("-", " "))
-	return df["MANUFACTURER_NAME_EN_STANDARD_STANDIFY"]
-
-
-@pandas_udf(ArrayType(StringType()), PandasUDFType.SCALAR)
-def manifacture_name_pseg_cut(mnf):
-	frame = {
-		"MANUFACTURER_NAME_STANDARD": mnf,
-	}
-	df = pd.DataFrame(frame)
-	lexicon = ["优时比", "省", "市", "第一三共", "诺维诺", "药业", "医药", "在田", "人人康", "健朗", "鑫威格", "景康", "皇甫谧", "安徽", "江中高邦"]
-	seg = pkuseg.pkuseg(user_dict=lexicon)
-
-	df["MANUFACTURER_NAME_STANDARD_WORDS"] = df["MANUFACTURER_NAME_STANDARD"].apply(lambda x: seg.cut(x))
-	return df["MANUFACTURER_NAME_STANDARD_WORDS"]
-
-
-@udf
-def cosine_distance_between_mnf(array):
-	u = array[0].toArray()
-	v = array[1].toArray()
-	return float(numpy.dot(u, v) / (sqrt(numpy.dot(u, u)) * sqrt(numpy.dot(v, v))))
-
-
-@pandas_udf(IntegerType(), PandasUDFType.SCALAR)
-def dic_words_to_index(words):
-	frame = {
-		"WORDS": words
-	}
-	df = pd.DataFrame(frame)
-
-
-	def is_geo_tag(w):
-		t = analyse.extract_tags(w, topK=5, withWeight=True, allowPOS=("ns",))
-		if len(t) == 0:
-			return 0
-		else:
-			return 1
-
-	df["GEO_TAG"] = df["WORDS"].apply(lambda x: is_geo_tag(x))
-	return df["GEO_TAG"]
-
-
 if __name__ == '__main__':
 	spark = prepare()
 
 	# 1. 利用standard中的中文列通过中文分词
 	df_standard = load_standard_prod(spark)
-	df_standard = df_standard.withColumn("MANUFACTURER_NAME_EN_STANDARD", manifacture_name_en_standify(df_standard.MANUFACTURER_NAME_EN_STANDARD))
-	# df_standard.select("MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_EN_STANDARD").show(truncate=False)
-
-	# 2. 英文的分词方法，tokenizer
-	tokenizer = Tokenizer(inputCol="MANUFACTURER_NAME_EN_STANDARD", outputCol="MANUFACTURER_NAME_EN_WORDS")
-	df_standard = tokenizer.transform(df_standard)
-
-	# 3. 中文的分词，jieba
-	df_standard = df_standard.withColumn("MANUFACTURER_NAME_WORDS", manifacture_name_pseg_cut(df_standard.MANUFACTURER_NAME_STANDARD))
-	# df_standard.select("MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_WORDS", "MANUFACTURER_NAME_EN_STANDARD", "MANUFACTURER_NAME_EN_WORDS").show(truncate=False)
-
-	# 4. 分词之后构建词库编码
-	# df_standard.show(truncate=False)
-
-	# 4.1 stop word remover 去掉不需要的词
-	stopWords = ["股份", "有限", "总公司", "公司", "集团", "制药", "总厂", "厂", "药业", "责任", "医药", "(", ")", "（", "）", \
-				 "有限公司", "股份", "控股", "集团", "总公司", "总厂", "厂", "责任", "公司", "有限", "有限责任", \
-			     "药业", "医药", "制药", "控股集团", "医药集团", "控股集团", "集团股份", "药厂", "分公司", "-", ".", "-", "·"]
-	remover = StopWordsRemover(stopWords=stopWords, inputCol="MANUFACTURER_NAME_WORDS", outputCol="MANUFACTURER_NAME_WORDS_FILTER")
-
-	df_words_cn = df_standard.select("MANUFACTURER_NAME_WORDS")
-	df_words_cn = remover.transform(df_words_cn)
-	# df_words_cn.show(truncate=False)
+	df_words_cn = phcleanning_mnf_seg(df_standard, "MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_WORDS_FILTER")
 
 	# 4.2 分离地理维度集合
 	df_words_cn_dic = df_words_cn.select(explode("MANUFACTURER_NAME_WORDS_FILTER").alias("WORD")).distinct()
-	# df_words_cn_dic = df_words_cn_dic.withColumn("GEO_TAG", dic_words_to_index(df_words_cn_dic.WORD))
-	# df_words_cn_dic.show()
-	# print(df_words_cn_dic.count())
 
 	# 5. 省市相关编码
 	# 5.1 地理维度的编码
