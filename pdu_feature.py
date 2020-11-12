@@ -609,3 +609,20 @@ def phcleanning_mnf_seg(df_standard, inputCol, outputCol):
 	remover = StopWordsRemover(stopWords=stopWords, inputCol="MANUFACTURER_NAME_WORDS", outputCol=outputCol)
 
 	return remover.transform(df_standard).drop("MANUFACTURER_NAME_WORDS")
+
+
+@pandas_udf(ArrayType(IntegerType()), PandasUDFType.GROUPED_AGG)
+def word_index_to_array(v):
+	return v.tolist()
+
+
+def words_to_reverse_index(df_cleanning, df_encode, inputCol, outputCol):
+	df_cleanning = df_cleanning.withColumn("tid", monotonically_increasing_id())
+	df_indexing = df_cleanning.withColumn("MANUFACTURER_NAME_STANDARD_WORD_LIST", explode(col(inputCol)))
+	df_indexing = df_indexing.join(df_encode, df_indexing.MANUFACTURER_NAME_STANDARD_WORD_LIST == df_encode.WORD, how="left")
+	df_indexing = df_indexing.groupBy("tid").agg(word_index_to_array(df_indexing.ENCODE).alias("INDEX_ENCODE"))
+
+	df_cleanning = df_cleanning.join(df_indexing, on="tid", how="left")
+	df_cleanning = df_cleanning.withColumn(outputCol, df_cleanning.INDEX_ENCODE)
+	df_cleanning = df_cleanning.drop("tid", "INDEX_ENCODE", "MANUFACTURER_NAME_STANDARD_WORD_LIST")
+	return df_cleanning
