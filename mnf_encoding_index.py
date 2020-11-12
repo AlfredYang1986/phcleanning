@@ -11,30 +11,11 @@ from dataparepare import *
 from interfere import *
 from pdu_feature import *
 from pyspark.sql.types import *
-from pyspark.sql.functions import pandas_udf
-from pyspark.sql.functions import udf
-from pyspark.sql.functions import when
-from pyspark.sql.functions import first
-from pyspark.sql.functions import array
-from pyspark.sql.functions import to_json
+from pyspark.sql.functions import array, array_contains
+from pyspark.sql.functions import broadcast
+from pyspark.sql.functions import monotonically_increasing_id
 from pyspark.sql.functions import explode
-from pyspark.sql.functions import min
-from pyspark.sql.functions import col
-from pyspark.ml.linalg import Vectors, VectorUDT
-from pyspark.ml.feature import VectorAssembler
-from pyspark.ml.feature import HashingTF, IDF, Tokenizer
-from pyspark.ml.feature import OneHotEncoderEstimator
-from pyspark.ml import Pipeline
-from pyspark.ml.classification import DecisionTreeClassifier
-from pyspark.ml.feature import StringIndexer, VectorIndexer, StopWordsRemover
-from pyspark.ml.evaluation import MulticlassClassificationEvaluator
-import pandas as pd
-import numpy
-from math import sqrt
-import pkuseg
-import jieba
-import jieba.posseg as pseg
-import jieba.analyse as analyse
+from pyspark.sql.functions import pandas_udf, PandasUDFType
 
 
 def prepare():
@@ -49,6 +30,7 @@ def prepare():
 		.config("spark.executor.memory", "2g") \
 		.config('spark.sql.codegen.wholeStage', False) \
 		.config("spark.sql.execution.arrow.enabled", "true") \
+		.config("spark.sql.crossJoin.enabled", "true") \
 		.getOrCreate()
 
 	access_key = os.getenv("AWS_ACCESS_KEY_ID")
@@ -73,6 +55,19 @@ if __name__ == '__main__':
 	df_cleanning = phcleanning_mnf_seg(df_cleanning, "MANUFACTURER_NAME", "MANUFACTURER_NAME_CLEANNING_WORDS")
 	df_cleanning.where((df_cleanning.label == 1.0) & (df_cleanning.EFFTIVENESS_MANUFACTURER < 0.9)) \
 		.select("MANUFACTURER_NAME", "MANUFACTURER_NAME_CLEANNING_WORDS", "MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_STANDARD_WORDS", "EFFTIVENESS_MANUFACTURER").show(100)
+	df_cleanning.printSchema()
 
 	# 2. WORD 编码化
-	
+	# 2.1 读WORD 编码
+	schema = StructType([
+			StructField("WORD", StringType()), \
+			StructField("ENCODE", IntegerType()), \
+		])
+	df_encode = spark.read.csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/district/words", schema=schema)
+
+	df_cleanning = words_to_reverse_index(df_cleanning, df_encode, "MANUFACTURER_NAME_STANDARD_WORDS", "MANUFACTURER_NAME_STANDARD_WORDS")
+	df_cleanning = words_to_reverse_index(df_cleanning, df_encode, "MANUFACTURER_NAME_CLEANNING_WORDS", "MANUFACTURER_NAME_CLEANNING_WORDS")
+	df_cleanning.where((df_cleanning.label == 1.0) & (df_cleanning.EFFTIVENESS_MANUFACTURER < 0.9)) \
+		.select("MANUFACTURER_NAME", "MANUFACTURER_NAME_CLEANNING_WORDS", "MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_STANDARD_WORDS", "EFFTIVENESS_MANUFACTURER").show(100)
+
+	df_cleanning.repartition(10).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/district/words-index")
