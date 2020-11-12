@@ -9,14 +9,14 @@ from dataparepare import *
 from interfere import *
 from pyspark.sql.types import *
 from pyspark.sql.functions import desc
-from pyspark.sql.functions import rank, lit
+from pyspark.sql.functions import rank, lit, when
 from pyspark.sql import Window
 from pyspark.ml.linalg import Vectors, VectorUDT
 from pyspark.ml.classification import MultilayerPerceptronClassificationModel
 from pyspark.ml.classification import DecisionTreeClassificationModel
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.ml import PipelineModel
-from pdu_feature import similarity, hit_place_prediction, dosage_replace, prod_name_replace, pack_replace
+from pdu_feature import similarity, hit_place_prediction, dosage_replace, prod_name_replace, pack_replace, mnf_encoding_index, mnf_encoding_cosine
 from pyspark.ml.feature import VectorAssembler
 
 
@@ -54,6 +54,7 @@ if __name__ == '__main__':
 	df_result = load_training_data(spark)  # 待清洗数据
 	# df_result.printSchema()
 	df_validate = df_result #.select("id", "label", "features").orderBy("id")
+	df_encode = load_word_dict_encode(spark) 
 
 	# 2. load model
 	# model = PipelineModel.load("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/dt")
@@ -127,33 +128,40 @@ if __name__ == '__main__':
 	count_prediction_se = df_candidate.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
 	print("第二轮总量= " + str(count_prediction_se))
 	
-	# 第二轮筛选的方法是：再对dosage列重新计算eff，要用到dosage_mapping
+	# 第二轮筛选的方法是：再对dosage等列重新计算eff，要用到dosage_mapping
 	df_second_round = df_candidate.drop("prediction", "indexedLabel", "indexedFeatures", "rawPrediction", "probability", "features")
 	dosage_mapping = load_dosage_mapping(spark)
-	# df_second_round = df_second_round.join(dosage_mapping, df_second_round.DOSAGE == dosage_mapping.CPA_DOSAGE, how="left").na.fill("")
-	# df_second_round = df_second_round.withColumn("EFFTIVENESS_DOSAGE_SE", dosage_replace(df_second_round.MASTER_DOSAGE, \
-	# 													df_second_round.DOSAGE_STANDARD, df_second_round.EFFTIVENESS_DOSAGE)) 
-														
-	df_second_round = df_second_round.withColumn("EFFTIVENESS_PRODUCT_NAME_SE", prod_name_replace(df_second_round.MOLE_NAME, df_second_round.MOLE_NAME_STANDARD, \
-														df_second_round.MANUFACTURER_NAME, df_second_round.MANUFACTURER_NAME_STANDARD, df_second_round.MANUFACTURER_NAME_EN_STANDARD))
+	df_second_round = df_second_round.join(dosage_mapping, df_second_round.DOSAGE == dosage_mapping.CPA_DOSAGE, how="left").na.fill("")
+	df_second_round = df_second_round.withColumn("EFFTIVENESS_DOSAGE_SE", dosage_replace(df_second_round.MASTER_DOSAGE, \
+														df_second_round.DOSAGE_STANDARD, df_second_round.EFFTIVENESS_DOSAGE)) 
 	
 	df_second_round = df_second_round.withColumn("EFFTIVENESS_PACK_QTY_SE", pack_replace(df_second_round.EFFTIVENESS_PACK_QTY, df_second_round.SPEC_ORIGINAL, \
 														df_second_round.PACK_QTY, df_second_round.PACK_QTY_STANDARD))
+	df_second_round = mnf_encoding_index(df_second_round, df_encode)
+	df_second_round = mnf_encoding_cosine(df_second_round)
+	df_second_round = df_second_round.withColumn("EFFTIVENESS_MANUFACTURER_SE", \
+										when(df_second_round.COSINE_SIMILARITY >= df_second_round.EFFTIVENESS_MANUFACTURER, df_second_round.COSINE_SIMILARITY) \
+										.otherwise(df_second_round.EFFTIVENESS_MANUFACTURER))
+	df_second_round = df_second_round.withColumn("EFFTIVENESS_PRODUCT_NAME_SE", \
+								prod_name_replace(df_second_round.EFFTIVENESS_MOLE_NAME, df_second_round.EFFTIVENESS_MANUFACTURER_SE, df_second_round.EFFTIVENESS_PRODUCT_NAME))
 	
 	
 	assembler = VectorAssembler( \
-				inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_PRODUCT_NAME_SE", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_SPEC", \
-							"EFFTIVENESS_PACK_QTY_SE", "EFFTIVENESS_MANUFACTURER"], \
+				inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_PRODUCT_NAME_SE", "EFFTIVENESS_DOSAGE_SE", "EFFTIVENESS_SPEC", \
+							"EFFTIVENESS_PACK_QTY_SE", "EFFTIVENESS_MANUFACTURER_SE"], \
 				outputCol="features")
 	df_second_round = assembler.transform(df_second_round)
 	# df_second_round.repartition(10).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/second_round_dt")
 	
 	predictions_second_round = model.transform(df_second_round)
-	# predictions_second_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/second_round_prediction_1")
+	predictions_second_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/second_round_prediction_1")
 	evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
 	accuracy = evaluator.evaluate(predictions_second_round)
 	print("Test Error = %g " % (1.0 - accuracy))
 	print("Test set accuracy = " + str(accuracy))
+	
+	# xixi1=predictions_second_round.toPandas()
+	# xixi1.to_excel('predictions_second_round_mnf.xlsx', index = False)
 	
 	# 第二轮正确率检测
 	df_true_positive_se = predictions_second_round.where(predictions_second_round.prediction == 1.0)
@@ -205,7 +213,7 @@ if __name__ == '__main__':
 	df_prediction_se = df_true_positive_se.select("id").distinct()
 	id_local_se = df_prediction_se.toPandas()["id"].tolist()
 	id_local_total = id_local_se + id_local
-	predictions_second_round = predictions_second_round.drop("EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_PACK_QTY")
+	predictions_second_round = predictions_second_round.drop("EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_PACK_QTY")
 	df_candidate_third = predictions_second_round.where(~result.id.isin(id_local_total)).withColumnRenamed("EFFTIVENESS_PRODUCT_NAME_SE", "EFFTIVENESS_PRODUCT_NAME") \
 																.withColumnRenamed("EFFTIVENESS_DOSAGE_SE", "EFFTIVENESS_DOSAGE") \
 																.withColumnRenamed("EFFTIVENESS_PACK_QTY_SE", "EFFTIVENESS_PACK_QTY")
