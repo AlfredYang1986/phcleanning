@@ -80,6 +80,9 @@ if __name__ == '__main__':
 	df_ph = result.where((result.prediction == 1.0) | (result.label == 1.0))
 	ph_total = result.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
 	print("数据总数： " + str(ph_total))
+	result = result.where(result.PACK_ID_CHECK != "")
+	ph_total = result.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
+	print("人工已匹配数据总数: " + str(ph_total))
 
 	# 5. 尝试解决多高的问题
 	df_true_positive = similarity(result.where(result.prediction == 1.0))
@@ -90,12 +93,14 @@ if __name__ == '__main__':
 	print("机器判断第一轮TP条目 = " + str(ph_positive_prodict))
 	ph_positive_hit = df_true_positive.where((result.prediction == result.label) & (result.label == 1.0)).count()
 	print("其中正确条目 = " + str(ph_positive_hit))
+	ph_tp_null_packid = df_true_positive.where(df_true_positive.PACK_ID_CHECK == "")
 	# ph_negetive_hit = result.where(result.prediction != result.label).count()
 	if ph_positive_prodict == 0:
 		print("Pharbers Test set accuracy （机器判断第一轮T比例） = 无 ")
 	else:
 		print("Pharbers Test set accuracy （机器判断第一轮TP比例） = " + str(ph_positive_prodict / ph_total))
 		print("Pharbers Test set precision （机器判断第一轮TP正确率） = " + str(ph_positive_hit / ph_positive_prodict))
+		print("人工没有匹配packid = " + str(ph_tp_null_packid.count()))
 
 	
 	# for analysis
@@ -157,12 +162,14 @@ if __name__ == '__main__':
 	print("机器判断第二轮TP条目 = " + str(ph_positive_prodict_se))
 	ph_positive_hit_se = df_true_positive_se.where((df_true_positive_se.prediction == df_true_positive_se.label) & (df_true_positive_se.label == 1.0)).count()
 	print("其中正确条目 = " + str(ph_positive_hit_se))
+	ph_tp_null_packid_se = df_true_positive_se.where(df_true_positive_se.PACK_ID_CHECK == "")
 	# ph_negetive_hit = result.where(result.prediction != result.label).count()
 	if ph_positive_prodict_se == 0:
 		print("Pharbers Test set accuracy （机器判断第二轮TP比例） = 无" )
 	else:
 		print("Pharbers Test set accuracy （机器判断第二轮TP比例） = " + str(ph_positive_prodict_se / ph_total))
 		print("Pharbers Test set precision （机器判断第二轮TP正确率） = " + str(ph_positive_hit_se / ph_positive_prodict_se))
+		print("人工没有匹配packid = " + str(ph_tp_null_packid_se.count()))
 	
 	# for analyses
 	# df_pre1_label0 = df_true_positive_se.where((df_true_positive_se.prediction == 1.0) & (df_true_positive_se.label == 0.0))
@@ -191,15 +198,14 @@ if __name__ == '__main__':
 	else:
 		print("Pharbers Test set accuracy （两轮判断TP总比例） = " + str(ph_positive_prodict / ph_total))
 		print("Pharbers Test set precision （两轮判断TP总正确率）= " + str(ph_positive_hit / ph_positive_prodict))
+		print("人工未匹配总量" + str(ph_tp_null_packid_se.count()+ph_tp_null_packid.count()))
 	
 
 	# 8. 第三轮
 	df_prediction_se = df_true_positive_se.select("id").distinct()
-	id_local_se = df_prediction_se.toPandas()["id"].tolist()  
-	# print(len(id_local))
+	id_local_se = df_prediction_se.toPandas()["id"].tolist()
 	id_local_total = id_local_se + id_local
-	# print(len(id_local_total))
-	predictions_second_round = predictions_second_round.drop("EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_PACK_QTY")
+	predictions_second_round = predictions_second_round.drop("EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_PACK_QTY")
 	df_candidate_third = predictions_second_round.where(~result.id.isin(id_local_total)).withColumnRenamed("EFFTIVENESS_PRODUCT_NAME_SE", "EFFTIVENESS_PRODUCT_NAME") \
 																.withColumnRenamed("EFFTIVENESS_DOSAGE_SE", "EFFTIVENESS_DOSAGE") \
 																.withColumnRenamed("EFFTIVENESS_PACK_QTY_SE", "EFFTIVENESS_PACK_QTY")
@@ -208,16 +214,15 @@ if __name__ == '__main__':
 	df_candidate_third = similarity(df_candidate_third)
 	
 	# 机器判断无法匹配
-	prediction_cannot = df_candidate_third.where(df_candidate_third.SIMILARITY > 3.0)
-	
-	prediction_third_round = df_candidate_third.where(df_candidate_third.SIMILARITY > 3.0)
+	# prediction_third_round = df_candidate_third.where(df_candidate_third.SIMILARITY > 3.0)
 	# prediction_third_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_3")
-	prediction_third_round = df_candidate_third.where(df_candidate_third.SIMILARITY > 4.0)
+	# prediction_third_round = df_candidate_third.where(df_candidate_third.SIMILARITY > 4.0)
 	# prediction_third_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_4")
-	prediction_third_round = prediction_third_round.groupBy("id").agg(sum(prediction_third_round.label).alias("right"))
+	xixi1=df_candidate_third.toPandas()
+	xixi1.to_excel('df_candidate_third.xlsx', index = False)
+	prediction_third_round = df_candidate_third.where(prediction_third_round.RANK <= 5).groupBy("id").agg(count("label").alias("label_sum"))
 	ph_positive_predict_th = prediction_third_round.count()
-	ph_positive_hit_th =  prediction_third_round.where(prediction_third_round.right != 0.0).count()
-	
+	ph_positive_hit_th =  prediction_third_round.where(prediction_third_round.label_sum != 0.0).count()
 	print("机器判断模糊数量= " + str(ph_positive_predict_th))
 	print("前五正确数量= " + str(ph_positive_hit_th))
 	

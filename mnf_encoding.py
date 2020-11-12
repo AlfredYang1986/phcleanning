@@ -47,6 +47,57 @@ def prepare():
 	return spark
 
 
+@pandas_udf(StringType(), PandasUDFType.SCALAR)
+def manifacture_name_en_standify(en):
+	frame = {
+		"MANUFACTURER_NAME_EN_STANDARD": en,
+	}
+	df = pd.DataFrame(frame)
+
+	# @尹 需要换成regex
+	df["MANUFACTURER_NAME_EN_STANDARD_STANDIFY"] = df["MANUFACTURER_NAME_EN_STANDARD"].apply(lambda x: x.replace(".", " ").replace("-", " "))
+	return df["MANUFACTURER_NAME_EN_STANDARD_STANDIFY"]
+
+
+@pandas_udf(ArrayType(StringType()), PandasUDFType.SCALAR)
+def manifacture_name_pseg_cut(mnf):
+	frame = {
+		"MANUFACTURER_NAME_STANDARD": mnf,
+	}
+	df = pd.DataFrame(frame)
+	lexicon = ["优时比", "省", "市", "第一三共", "诺维诺", "药业", "医药", "在田", "人人康", "健朗", "鑫威格", "景康", "皇甫谧", "安徽", "江中高邦"]
+	seg = pkuseg.pkuseg(user_dict=lexicon)
+
+	df["MANUFACTURER_NAME_STANDARD_WORDS"] = df["MANUFACTURER_NAME_STANDARD"].apply(lambda x: seg.cut(x))
+	return df["MANUFACTURER_NAME_STANDARD_WORDS"]
+
+
+@udf
+def cosine_distance_between_mnf(array):
+	u = array[0].toArray()
+	v = array[1].toArray()
+	return float(numpy.dot(u, v) / (sqrt(numpy.dot(u, u)) * sqrt(numpy.dot(v, v))))
+
+
+@pandas_udf(IntegerType(), PandasUDFType.SCALAR)
+def dic_words_to_index(words):
+	frame = {
+		"WORDS": words
+	}
+	df = pd.DataFrame(frame)
+
+
+	def is_geo_tag(w):
+		t = analyse.extract_tags(w, topK=5, withWeight=True, allowPOS=("ns",))
+		if len(t) == 0:
+			return 0
+		else:
+			return 1
+
+	df["GEO_TAG"] = df["WORDS"].apply(lambda x: is_geo_tag(x))
+	return df["GEO_TAG"]
+
+
 if __name__ == '__main__':
 	spark = prepare()
 
@@ -56,6 +107,10 @@ if __name__ == '__main__':
 
 	# 4.2 分离地理维度集合
 	df_words_cn_dic = df_words_cn.select(explode("MANUFACTURER_NAME_WORDS_FILTER").alias("WORD")).distinct()
+
+	# df_words_cn_dic = df_words_cn_dic.withColumn("GEO_TAG", dic_words_to_index(df_words_cn_dic.WORD))
+	# df_words_cn_dic.show()
+	# print(df_words_cn_dic.count())
 
 	# 5. 省市相关编码
 	# 5.1 地理维度的编码
