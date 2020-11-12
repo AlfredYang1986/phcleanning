@@ -19,6 +19,7 @@ from pyspark.sql.functions import array
 from pyspark.sql.functions import to_json
 from pyspark.sql.functions import explode
 from pyspark.sql.functions import min
+from pyspark.sql.functions import col
 from pyspark.ml.linalg import Vectors, VectorUDT
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.feature import HashingTF, IDF, Tokenizer
@@ -68,101 +69,10 @@ if __name__ == '__main__':
 
 	# 1. 利用standard中的中文列通过中文分词
 	df_cleanning = load_training_data(spark)
+	df_cleanning = phcleanning_mnf_seg(df_cleanning, "MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_STANDARD_WORDS")
+	df_cleanning = phcleanning_mnf_seg(df_cleanning, "MANUFACTURER_NAME", "MANUFACTURER_NAME_CLEANNING_WORDS")
+	df_cleanning.where((df_cleanning.label == 1.0) & (df_cleanning.EFFTIVENESS_MANUFACTURER < 0.9)) \
+		.select("MANUFACTURER_NAME", "MANUFACTURER_NAME_CLEANNING_WORDS", "MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_STANDARD_WORDS", "EFFTIVENESS_MANUFACTURER").show(100)
 
-	# 3. 中文的分词
-	df_standard = df_standard.withColumn("MANUFACTURER_NAME_WORDS", manifacture_name_pseg_cut(df_standard.MANUFACTURER_NAME_STANDARD))
-	# df_standard.select("MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_WORDS", "MANUFACTURER_NAME_EN_STANDARD", "MANUFACTURER_NAME_EN_WORDS").show(truncate=False)
-
-	# 4. 分词之后构建词库编码
-	# df_standard.show(truncate=False)
-
-	# 4.1 stop word remover 去掉不需要的词
-	stopWords = ["股份", "有限", "总公司", "公司", "集团", "制药", "总厂", "厂", "药业", "责任", "医药", "(", ")", "（", "）", \
-				 "有限公司", "股份", "控股", "集团", "总公司", "总厂", "厂", "责任", "公司", "有限", "有限责任", \
-			     "药业", "医药", "制药", "控股集团", "医药集团", "控股集团", "集团股份", "药厂", "分公司", "-", ".", "-", "·"]
-	remover = StopWordsRemover(stopWords=stopWords, inputCol="MANUFACTURER_NAME_WORDS", outputCol="MANUFACTURER_NAME_WORDS_FILTER")
-
-	df_words_cn = df_standard.select("MANUFACTURER_NAME_WORDS")
-	df_words_cn = remover.transform(df_words_cn)
-	# df_words_cn.show(truncate=False)
-
-	# 4.2 分离地理维度集合
-	df_words_cn_dic = df_words_cn.select(explode("MANUFACTURER_NAME_WORDS_FILTER").alias("WORD")).distinct()
-	# df_words_cn_dic = df_words_cn_dic.withColumn("GEO_TAG", dic_words_to_index(df_words_cn_dic.WORD))
-	# df_words_cn_dic.show()
-	# print(df_words_cn_dic.count())
-
-	# 5. 省市相关编码
-	# 5.1 地理维度的编码
-	schema = StructType([
-				StructField("ID", StringType()), \
-    			StructField("NAME", StringType()), \
-    			StructField("PARENTID", StringType()), \
-    			StructField("SN1", StringType()), \
-    			StructField("SN2", StringType()), \
-    			StructField("SNC", StringType()), \
-    			StructField("NOTHING", StringType()), \
-    			StructField("LEVEL", StringType()), \
-    		])
-	df_geo_standard = spark.read.csv(path="s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/district/district-full.csv", sep="\t", schema=schema)
-	df_geo_standard = df_geo_standard.select("ID", "NAME", "PARENTID")
-	# df_geo_standard.show()
-
-	# 5.2 优先搞定省市问题
-	# df_words_cn_dic_encoder = df_words_cn_dic.where(df_words_cn_dic.GEO_TAG == 1)
-	df_words_cn_dic_encoder = df_words_cn_dic
-	df_words_cn_dic_encoder = df_words_cn_dic_encoder.join(df_geo_standard, df_words_cn_dic_encoder.WORD == df_geo_standard.NAME, how="left")
-	df_words_cn_dic_encoder = df_words_cn_dic_encoder.na.fill({"ID": "-1", "NAME": "", "PARENTID": "-1"})
-	df_words_cn_dic_encoder = df_words_cn_dic_encoder.select("WORD", df_words_cn_dic_encoder.ID.alias("AREACODE"), df_words_cn_dic_encoder.PARENTID.alias("AREA_PARENT_ID"))
-
-	count = df_words_cn_dic_encoder.where(~(df_words_cn_dic_encoder.AREA_PARENT_ID == "0") & ~(df_words_cn_dic_encoder.AREA_PARENT_ID == "-1")).count()
-	while count > 0:
-		df_words_cn_dic_encoder = df_words_cn_dic_encoder.join(df_geo_standard, df_words_cn_dic_encoder.AREA_PARENT_ID == df_geo_standard.ID, how="left")
-		df_words_cn_dic_encoder = df_words_cn_dic_encoder.na.fill({"ID": "-1", "NAME": "", "PARENTID": "-1"})
-		df_words_cn_dic_encoder = df_words_cn_dic_encoder.withColumn("AREACODE", when(~(df_words_cn_dic_encoder.AREA_PARENT_ID == "0"), df_words_cn_dic_encoder.ID).otherwise(df_words_cn_dic_encoder.AREACODE)) \
-																.withColumn("AREA_PARENT_ID", when(~(df_words_cn_dic_encoder.AREA_PARENT_ID == "0"), df_words_cn_dic_encoder.PARENTID).otherwise(df_words_cn_dic_encoder.AREA_PARENT_ID)) \
-																.select("WORD", "AREACODE", "AREA_PARENT_ID")
-																# .select("WORD", "AREACODE", "AREA_PARENT_ID", "NAME")
-		count = df_words_cn_dic_encoder.where(~(df_words_cn_dic_encoder.AREA_PARENT_ID == "0") & ~(df_words_cn_dic_encoder.AREA_PARENT_ID == "-1")).count()
-
-	df_words_cn_dic_encoder = df_words_cn_dic_encoder.withColumn("GEO_ENCODE", df_words_cn_dic_encoder.AREACODE.cast(IntegerType()))
-	df_words_cn_dic_encoder = df_words_cn_dic_encoder.withColumn("GEO_ENCODE", when(df_words_cn_dic_encoder.GEO_ENCODE > 0, 1000 + df_words_cn_dic_encoder.GEO_ENCODE).otherwise(-1)) \
-														.select("WORD", "GEO_ENCODE")
-	df_words_cn_dic_encoder.show()
-
-	# 6. 国家编码的问题
-	df_country_standard = spark.read.csv(path="s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/district/COUNTRY_NAME.csv", header=True) \
-								.repartition(1).withColumn("ID", monotonically_increasing_id())
-	df_words_cn_dic_encoder = df_words_cn_dic_encoder.join(df_country_standard, df_words_cn_dic_encoder.WORD == df_country_standard.COUNTRY_CN_NAME, how="left")
-	df_words_cn_dic_encoder	= df_words_cn_dic_encoder.withColumn("COUNTRY_ENCODE", df_words_cn_dic_encoder.ID.cast(IntegerType())).na.fill(-1.0)
-	df_words_cn_dic_encoder = df_words_cn_dic_encoder.select("WORD", "GEO_ENCODE", "COUNTRY_ENCODE")
-	df_words_cn_dic_encoder.show()
-
-	# 7. 高分编码问题
-	# 以后在添加拼音等问题
-	# 去掉区和省名相同的情况
-	df_words_cn_dic_encoder = df_words_cn_dic_encoder.groupBy("WORD") \
-								.agg(min(df_words_cn_dic_encoder.GEO_ENCODE).alias("GEO_ENCODE"), \
-									min(df_words_cn_dic_encoder.COUNTRY_ENCODE).alias("COUNTRY_ENCODE"))
-	# df_words_cn_dic_encoder.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/district/words")
-
-	# 7.1 高分词
-	df_high_scroe_word = spark.read.csv(path="s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/district/HIGH_WORD.csv", header=True).distinct() \
-								.repartition(1).withColumn("ID", monotonically_increasing_id())
-	# df_high_scroe_word.show(truncate=False)
-
-	df_words_cn_dic_encoder = df_words_cn_dic_encoder.join(df_high_scroe_word, df_words_cn_dic_encoder.WORD == df_high_scroe_word.HIGH_WORD, how="left").na.fill("-1.0")
-	df_words_cn_dic_encoder = df_words_cn_dic_encoder.withColumn("HIGH_WORD_ENCODE", 2000 + df_words_cn_dic_encoder.ID.cast(IntegerType())).na.fill(-1.0)
-	df_words_cn_dic_encoder = df_words_cn_dic_encoder.select("WORD", "GEO_ENCODE", "COUNTRY_ENCODE", "HIGH_WORD_ENCODE")
-
-	# 8. 其它分词
-	df_words_cn_dic_encoder = df_words_cn_dic_encoder.repartition(1).withColumn("OTHER_WORD_ENCODE", 3001 + monotonically_increasing_id()).na.fill(-1.0)
-
-	# 9. 从所有的编码中，选出所需的
-	df_words_cn_dic_encoder = df_words_cn_dic_encoder.repartition(8).withColumn("WORD_ENCODE", \
-								when(df_words_cn_dic_encoder.GEO_ENCODE > 0, df_words_cn_dic_encoder.GEO_ENCODE).otherwise( \
-									when(df_words_cn_dic_encoder.COUNTRY_ENCODE > 0, df_words_cn_dic_encoder.COUNTRY_ENCODE).otherwise( \
-										when(df_words_cn_dic_encoder.HIGH_WORD_ENCODE > 0, df_words_cn_dic_encoder.HIGH_WORD_ENCODE).otherwise( \
-											df_words_cn_dic_encoder.OTHER_WORD_ENCODE)))).na.fill(-1.0).select("WORD", "WORD_ENCODE")
-	df_words_cn_dic_encoder.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/district/words")
-	df_words_cn_dic_encoder.show()
+	# 2. WORD 编码化
+	

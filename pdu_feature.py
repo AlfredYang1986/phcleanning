@@ -21,7 +21,14 @@ from pyspark.sql.functions import concat
 from pyspark.sql.functions import desc
 from pyspark.sql.functions import rank
 from pyspark.sql.functions import when
+from pyspark.sql.functions import col
+from pyspark.ml.linalg import Vectors, VectorUDT
+from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.feature import HashingTF, IDF, Tokenizer
+from pyspark.ml.feature import OneHotEncoderEstimator
+from pyspark.ml.feature import StopWordsRemover
 from pyspark.sql import Window
+from math import sqrt
 import re
 import numpy as np
 import pandas as pd
@@ -554,7 +561,8 @@ def manifacture_name_pseg_cut(mnf):
 		"MANUFACTURER_NAME_STANDARD": mnf,
 	}
 	df = pd.DataFrame(frame)
-	lexicon = ["优时比", "省", "市", "第一三共", "诺维诺", "药业", "医药", "在田", "人人康", "健朗", "鑫威格", "景康", "皇甫谧", "安徽", "江中高邦"]
+	lexicon = ["优时比", "省", "市", "第一三共", "诺维诺", "药业", "医药", "在田", "人人康", \
+				"健朗", "鑫威格", "景康", "皇甫谧", "安徽", "江中高邦", "鲁抗", "辰欣", "法玛西亚普强", "正大天晴", "拜耳", "三才"]
 	seg = pkuseg.pkuseg(user_dict=lexicon)
 
 	df["MANUFACTURER_NAME_STANDARD_WORDS"] = df["MANUFACTURER_NAME_STANDARD"].apply(lambda x: seg.cut(x))
@@ -588,24 +596,21 @@ def dic_words_to_index(words):
 
 
 def phcleanning_mnf_seg(df_standard, inputCol, outputCol):
-	# df_standard = df_standard.withColumn("MANUFACTURER_NAME_EN_STANDARD", manifacture_name_en_standify(df_standard.MANUFACTURER_NAME_EN_STANDARD))
-	df_standard = df_standard.withColumn("MANUFACTURER_NAME_EN_STANDARD", manifacture_name_en_standify(col("MANUFACTURER_NAME_EN_STANDARD")))
-	# df_standard.select("MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_EN_STANDARD").show(truncate=False)
-
 	# 2. 英文的分词方法，tokenizer
-	tokenizer = Tokenizer(inputCol="MANUFACTURER_NAME_EN_STANDARD", outputCol="MANUFACTURER_NAME_EN_WORDS")
-	df_standard = tokenizer.transform(df_standard)
+	# 英文先不管
+	# df_standard = df_standard.withColumn("MANUFACTURER_NAME_EN_STANDARD", manifacture_name_en_standify(col("MANUFACTURER_NAME_EN_STANDARD")))
+	# df_standard.select("MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_EN_STANDARD").show(truncate=False)
+	# tokenizer = Tokenizer(inputCol="MANUFACTURER_NAME_EN_STANDARD", outputCol="MANUFACTURER_NAME_EN_WORDS")
+	# df_standard = tokenizer.transform(df_standard)
 
-	# 3. 中文的分词，jieba
-	# df_standard = df_standard.withColumn("MANUFACTURER_NAME_WORDS", manifacture_name_pseg_cut(df_standard.MANUFACTURER_NAME_STANDARD))
+	# 3. 中文的分词，
 	df_standard = df_standard.withColumn("MANUFACTURER_NAME_WORDS", manifacture_name_pseg_cut(col(inputCol)))
-	# df_standard.select("MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_WORDS", "MANUFACTURER_NAME_EN_STANDARD", "MANUFACTURER_NAME_EN_WORDS").show(truncate=False)
 
 	# 4. 分词之后构建词库编码
 	# 4.1 stop word remover 去掉不需要的词
-	stopWords = ["股份", "有限", "总公司", "公司", "集团", "制药", "总厂", "厂", "药业", "责任", "医药", "(", ")", "（", "）", \
-				 "有限公司", "股份", "控股", "集团", "总公司", "总厂", "厂", "责任", "公司", "有限", "有限责任", \
-			     "药业", "医药", "制药", "控股集团", "医药集团", "控股集团", "集团股份", "药厂", "分公司", "-", ".", "-", "·"]
+	stopWords = ["省", "市", "股份", "有限", "总公司", "公司", "集团", "制药", "总厂", "厂", "药业", "责任", "医药", "(", ")", "（", "）", \
+				 "有限公司", "股份", "控股", "集团", "总公司", "公司", "有限", "有限责任", \
+			     "药业", "医药", "制药", "制药厂", "控股集团", "医药集团", "控股集团", "集团股份", "药厂", "分公司", "-", ".", "-", "·", ":"]
 	remover = StopWordsRemover(stopWords=stopWords, inputCol="MANUFACTURER_NAME_WORDS", outputCol=outputCol)
 
-	return remover.transform(df_standard)
+	return remover.transform(df_standard).drop("MANUFACTURER_NAME_WORDS")

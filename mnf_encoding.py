@@ -11,30 +11,13 @@ from dataparepare import *
 from interfere import *
 from pdu_feature import *
 from pyspark.sql.types import *
-from pyspark.sql.functions import pandas_udf
-from pyspark.sql.functions import udf
 from pyspark.sql.functions import when
-from pyspark.sql.functions import first
-from pyspark.sql.functions import array
-from pyspark.sql.functions import to_json
 from pyspark.sql.functions import explode
 from pyspark.sql.functions import min
-from pyspark.sql.functions import col
-from pyspark.ml.linalg import Vectors, VectorUDT
-from pyspark.ml.feature import VectorAssembler
-from pyspark.ml.feature import HashingTF, IDF, Tokenizer
-from pyspark.ml.feature import OneHotEncoderEstimator
 from pyspark.ml import Pipeline
-from pyspark.ml.classification import DecisionTreeClassifier
-from pyspark.ml.feature import StringIndexer, VectorIndexer, StopWordsRemover
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 import pandas as pd
 import numpy
-from math import sqrt
-import pkuseg
-import jieba
-import jieba.posseg as pseg
-import jieba.analyse as analyse
 
 
 def prepare():
