@@ -138,7 +138,6 @@ if __name__ == '__main__':
 	# df_result.show()
 	
 	# 更改优化eff的计算方法
-
 	# features
 	assembler = VectorAssembler( \
 					inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_SPEC", \
