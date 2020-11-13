@@ -76,6 +76,10 @@ if __name__ == '__main__':
 	# 4.2 分离地理维度集合
 	df_words_cn_dic = df_words_cn.select(explode("MANUFACTURER_NAME_WORDS_FILTER").alias("WORD")).distinct()
 
+	# df_words_cn_dic = df_words_cn_dic.withColumn("GEO_TAG", dic_words_to_index(df_words_cn_dic.WORD))
+	# df_words_cn_dic.show()
+	# print(df_words_cn_dic.count())
+
 	# 5. 省市相关编码
 	# 5.1 地理维度的编码
 	schema = StructType([
