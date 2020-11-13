@@ -81,9 +81,9 @@ if __name__ == '__main__':
 	df_ph = result.where((result.prediction == 1.0) | (result.label == 1.0))
 	ph_total = result.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
 	print("数据总数： " + str(ph_total))
-	result = result.where(result.PACK_ID_CHECK != "")
-	ph_total = result.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
-	print("人工已匹配数据总数: " + str(ph_total))
+	# result = result.where(result.PACK_ID_CHECK != "")
+	# ph_total = result.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
+	# print("人工已匹配数据总数: " + str(ph_total))
 
 	# 5. 尝试解决多高的问题
 	df_true_positive = similarity(result.where(result.prediction == 1.0))
@@ -213,9 +213,10 @@ if __name__ == '__main__':
 	df_prediction_se = df_true_positive_se.select("id").distinct()
 	id_local_se = df_prediction_se.toPandas()["id"].tolist()
 	id_local_total = id_local_se + id_local
-	predictions_second_round = predictions_second_round.drop("EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_PACK_QTY")
+	predictions_second_round = predictions_second_round.drop("EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_PACK_QTY", "EFFTIVENESS_MANUFACTURER")
 	df_candidate_third = predictions_second_round.where(~result.id.isin(id_local_total)).withColumnRenamed("EFFTIVENESS_PRODUCT_NAME_SE", "EFFTIVENESS_PRODUCT_NAME") \
 																.withColumnRenamed("EFFTIVENESS_DOSAGE_SE", "EFFTIVENESS_DOSAGE") \
+																.withColumnRenamed("EFFTIVENESS_MANUFACTURER_SE", "EFFTIVENESS_MANUFACTURER") \
 																.withColumnRenamed("EFFTIVENESS_PACK_QTY_SE", "EFFTIVENESS_PACK_QTY")
 	count_third = df_candidate_third.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
 	print("第三轮总量= " + str(count_third))
@@ -223,12 +224,13 @@ if __name__ == '__main__':
 	
 	# 机器判断无法匹配
 	# prediction_third_round = df_candidate_third.where(df_candidate_third.SIMILARITY > 3.0)
-	# prediction_third_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_3")
+	df_candidate_third.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_1113qilu2")
+	# df_candidate_third.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_1113az")
 	# prediction_third_round = df_candidate_third.where(df_candidate_third.SIMILARITY > 4.0)
 	# prediction_third_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_4")
-	xixi1=df_candidate_third.toPandas()
-	xixi1.to_excel('df_candidate_third.xlsx', index = False)
-	prediction_third_round = df_candidate_third.where(prediction_third_round.RANK <= 5).groupBy("id").agg(count("label").alias("label_sum"))
+	# xixi1=df_candidate_third.toPandas()
+	# xixi1.to_excel('df_candidate_third.xlsx', index = False)
+	prediction_third_round = df_candidate_third.where(df_candidate_third.RANK <= 5).groupBy("id").agg(count("label").alias("label_sum"))
 	ph_positive_predict_th = prediction_third_round.count()
 	ph_positive_hit_th =  prediction_third_round.where(prediction_third_round.label_sum != 0.0).count()
 	print("机器判断模糊数量= " + str(ph_positive_predict_th))
