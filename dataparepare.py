@@ -41,11 +41,15 @@ training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azs
 # training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.1/tmp/data3"
 
 
+def load_word_dict_encode(spark):
+	df_encode = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/word_dict")
+	return df_encode
+
 """
 读取标准表WW
 """
 def load_standard_prod(spark):
-	 df_standard = spark.read.parquet("s3a://ph-stream/common/public/prod/0.0.18") \
+	 df_standard = spark.read.parquet("s3a://ph-stream/common/public/prod/0.0.19") \
 					.select("PACK_ID",
 							  "MOLE_NAME_CH", "MOLE_NAME_EN",
 							  "PROD_DESC", "PROD_NAME_CH",
@@ -100,7 +104,7 @@ def modify_pool_cleanning_prod(spark):
 
 	 # 为了验证算法，保证id尽可能可读性，投入使用后需要删除
 	 df_cleanning = df_cleanning.repartition(1).withColumn("id", monotonically_increasing_id())
-
+	 
 	 #df_cleanning = df_cleanning.readStream.withColumn("id", monotonically_increasing_id())
 	 print("源数据条目： "+ str(df_cleanning.count()))
 	 df_cleanning.show()

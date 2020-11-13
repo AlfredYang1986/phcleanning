@@ -93,6 +93,8 @@ if __name__ == '__main__':
 	spark = prepare()
 
 	df_cleanning = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/district/words-index")
+	df_cleanning.show()
+	print(df_cleanning.count())
 	df_cleanning = df_cleanning.withColumn("COSINE_SIMILARITY", \
 					mnf_index_word_cosine_similarity(df_cleanning.MANUFACTURER_NAME_CLEANNING_WORDS, df_cleanning.MANUFACTURER_NAME_STANDARD_WORDS))
 	df_cleanning.where((df_cleanning.label == 1.0) & (df_cleanning.EFFTIVENESS_MANUFACTURER < 0.9) & (df_cleanning.COSINE_SIMILARITY > df_cleanning.EFFTIVENESS_MANUFACTURER)) \
