@@ -135,7 +135,7 @@ if __name__ == '__main__':
 					.drop("EFFTIVENESS")
 
 	# df_result.show()
-
+	
 	# features
 	assembler = VectorAssembler( \
 					inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_SPEC", \
