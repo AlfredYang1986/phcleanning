@@ -14,10 +14,13 @@ from pyspark.sql.types import *
 from pyspark.sql.functions import when
 from pyspark.sql.functions import explode
 from pyspark.sql.functions import min
+from pyspark.sql.functions import first
+from pyspark.sql.functions import pandas_udf, PandasUDFType
 from pyspark.ml import Pipeline
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 import pandas as pd
 import numpy
+from math import sqrt
 
 
 def prepare():
@@ -47,12 +50,28 @@ def prepare():
 	return spark
 
 
+@pandas_udf(StringType(), PandasUDFType.SCALAR)
+def convert_array_words_to_string(arr):
+	frame = {
+		"ARRARY": arr
+	}
+	df = pd.DataFrame(frame)
+
+	df["RESULT"] = df["ARRARY"].apply(lambda x: ",".join(x.tolist()))
+	return df["RESULT"]
+
+
 if __name__ == '__main__':
 	spark = prepare()
 
 	# 1. 利用standard中的中文列通过中文分词
 	df_standard = load_standard_prod(spark)
 	df_words_cn = phcleanning_mnf_seg(df_standard, "MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_WORDS_FILTER")
+
+	df_words_out = df_words_cn.groupBy("MANUFACTURER_NAME_STANDARD").agg(first(df_words_cn.MANUFACTURER_NAME_WORDS_FILTER).alias("WORDS"))
+	df_words_out = df_words_out.withColumn("WORDS", convert_array_words_to_string(df_words_out.WORDS))
+	df_words_out.repartition(1).write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/district/split-words-out")
+	df_words_out.show()
 
 	# 4.2 分离地理维度集合
 	df_words_cn_dic = df_words_cn.select(explode("MANUFACTURER_NAME_WORDS_FILTER").alias("WORD")).distinct()
