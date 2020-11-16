@@ -558,8 +558,12 @@ def manifacture_name_pseg_cut(mnf):
 		"MANUFACTURER_NAME_STANDARD": mnf,
 	}
 	df = pd.DataFrame(frame)
-	lexicon = ["优时比", "省", "市", "第一三共", "诺维诺", "药业", "医药", "在田", "人人康", \
-				"健朗", "鑫威格", "景康", "皇甫谧", "安徽", "江中高邦", "鲁抗", "辰欣", "法玛西亚普强", "正大天晴", "拜耳", "三才"]
+	lexicon = ["优时比", "省", "市", "第一三共", "诺维诺", "药业", "医药", "在田", "人人康", "金蟾", "爱可泰隆", "安科生物", "余良卿", "城市", ""\
+				"健朗", "鑫威格", "景康", "皇甫谧", "安徽", "江中高邦", "鲁抗", "辰欣", "法玛西亚普强", "正大天晴", "拜耳", "三才", "仁和", \
+				"先求", "山德士", "依比威", "澳美", "百济神州", "百泰", "百泰", "百正", "拜耳先灵", "包头中药", "北大维信", "北生研", "北医联合", "第一生物", "费森尤斯卡比",\
+				"费森尤斯卡比", "韩美", "华润高科", "九发", "康必得", "赛而", "四环生物", "四环制药", "优你特", "比奥罗历加", "得能", "雷允上", "千红", \
+				"佛都", "九泓", "华神生物", "康弘生物", "康弘药业", "力思特", "赛林泰", "万泽", "和创", "老拨云堂", "大连生物", "医创药业", "医创中药", \
+				"爱活", "马博士", "金美济", "3M", "百科达", "赛特多", "益普生", "法玛西亚", "珐博进", "德芮可", "天和", "大药厂"]
 	seg = pkuseg.pkuseg(user_dict=lexicon)
 
 	df["MANUFACTURER_NAME_STANDARD_WORDS"] = df["MANUFACTURER_NAME_STANDARD"].apply(lambda x: seg.cut(x))
@@ -606,8 +610,8 @@ def phcleanning_mnf_seg(df_standard, inputCol, outputCol):
 	# 4. 分词之后构建词库编码
 	# 4.1 stop word remover 去掉不需要的词
 	stopWords = ["省", "市", "股份", "有限", "总公司", "公司", "集团", "制药", "总厂", "厂", "药业", "责任", "医药", "(", ")", "（", "）", \
-				 "有限公司", "股份", "控股", "集团", "总公司", "公司", "有限", "有限责任", \
-			     "药业", "医药", "制药", "制药厂", "控股集团", "医药集团", "控股集团", "集团股份", "药厂", "分公司", "-", ".", "-", "·", ":"]
+				 "有限公司", "股份", "控股", "集团", "总公司", "公司", "有限", "有限责任", "大药厂", \
+			     "药业", "医药", "制药", "制药厂", "控股集团", "医药集团", "控股集团", "集团股份", "药厂", "分公司", "-", ".", "-", "·", ":", ","]
 	remover = StopWordsRemover(stopWords=stopWords, inputCol="MANUFACTURER_NAME_WORDS", outputCol=outputCol)
 
 	return remover.transform(df_standard).drop("MANUFACTURER_NAME_WORDS")
@@ -661,19 +665,20 @@ def mnf_index_word_cosine_similarity(o, v):
 		s.sort()
 		for item in s:
 			if isnan(item):
-				idx.append(5999)
+				idx.append(7999)
 				values.append(1)
 				break
 			else:
 				idx.append(item)
 				if item < 2000:
 					values.append(2)
-				elif (item >= 2000) & (item < 3000):
+				elif (item >= 2000) & (item < 5000):
 					values.append(10)
 				else:
 					values.append(1)
 
-		return Vectors.sparse(6000, idx, values)
+		return Vectors.sparse(8000, idx, values)
+		#                    (向量长度，索引数组，与索引数组对应的数值数组)
 
 
 	def cosine_distance(u, v):

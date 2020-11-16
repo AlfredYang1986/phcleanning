@@ -224,7 +224,7 @@ if __name__ == '__main__':
 	
 	# 机器判断无法匹配
 	# prediction_third_round = df_candidate_third.where(df_candidate_third.SIMILARITY > 3.0)
-	df_candidate_third.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_1113qilu2")
+	# df_candidate_third.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_1113qilu2")
 	# df_candidate_third.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_1113az")
 	# prediction_third_round = df_candidate_third.where(df_candidate_third.SIMILARITY > 4.0)
 	# prediction_third_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_4")
