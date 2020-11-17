@@ -81,9 +81,9 @@ if __name__ == '__main__':
 	df_ph = result.where((result.prediction == 1.0) | (result.label == 1.0))
 	ph_total = result.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
 	print("数据总数： " + str(ph_total))
-	# result = result.where(result.PACK_ID_CHECK != "")
-	# ph_total = result.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
-	# print("人工已匹配数据总数: " + str(ph_total))
+	result = result.where(result.PACK_ID_CHECK != "")
+	ph_total = result.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
+	print("人工已匹配数据总数: " + str(ph_total))
 
 	# 5. 尝试解决多高的问题
 	df_true_positive = similarity(result.where(result.prediction == 1.0))
@@ -224,7 +224,7 @@ if __name__ == '__main__':
 	
 	# 机器判断无法匹配
 	# prediction_third_round = df_candidate_third.where(df_candidate_third.SIMILARITY > 3.0)
-	# df_candidate_third.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_1113qilu2")
+	df_candidate_third.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_1117qilu")
 	# df_candidate_third.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_1113az")
 	# prediction_third_round = df_candidate_third.where(df_candidate_third.SIMILARITY > 4.0)
 	# prediction_third_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_4")

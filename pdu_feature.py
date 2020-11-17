@@ -558,12 +558,9 @@ def manifacture_name_pseg_cut(mnf):
 		"MANUFACTURER_NAME_STANDARD": mnf,
 	}
 	df = pd.DataFrame(frame)
-	lexicon = ["优时比", "省", "市", "第一三共", "诺维诺", "药业", "医药", "在田", "人人康", "金蟾", "爱可泰隆", "安科生物", "余良卿", "城市", ""\
-				"健朗", "鑫威格", "景康", "皇甫谧", "安徽", "江中高邦", "鲁抗", "辰欣", "法玛西亚普强", "正大天晴", "拜耳", "三才", "仁和", \
-				"先求", "山德士", "依比威", "澳美", "百济神州", "百泰", "百泰", "百正", "拜耳先灵", "包头中药", "北大维信", "北生研", "北医联合", "第一生物", "费森尤斯卡比",\
-				"费森尤斯卡比", "韩美", "华润高科", "九发", "康必得", "赛而", "四环生物", "四环制药", "优你特", "比奥罗历加", "得能", "雷允上", "千红", \
-				"佛都", "九泓", "华神生物", "康弘生物", "康弘药业", "力思特", "赛林泰", "万泽", "和创", "老拨云堂", "大连生物", "医创药业", "医创中药", \
-				"爱活", "马博士", "金美济", "3M", "百科达", "赛特多", "益普生", "法玛西亚", "珐博进", "德芮可", "天和", "大药厂"]
+	df_lexicon = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/lexicon")
+	df_pd = df_lexicon.toPandas()  # type = pd.df
+	lexicon = df_pd["HIGH_SCORE_WORDS"].tolist()  # type = list
 	seg = pkuseg.pkuseg(user_dict=lexicon)
 
 	df["MANUFACTURER_NAME_STANDARD_WORDS"] = df["MANUFACTURER_NAME_STANDARD"].apply(lambda x: seg.cut(x))
