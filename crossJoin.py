@@ -123,7 +123,8 @@ if __name__ == '__main__':
 						df_result.DOSAGE, df_result.DOSAGE_STANDARD, \
 						df_result.SPEC, df_result.SPEC_STANDARD, \
 						df_result.PACK_QTY, df_result.PACK_QTY_STANDARD, \
-						df_result.MANUFACTURER_NAME, df_result.MANUFACTURER_NAME_STANDARD, df_result.MANUFACTURER_NAME_EN_STANDARD \
+						df_result.MANUFACTURER_NAME, df_result.MANUFACTURER_NAME_STANDARD, df_result.MANUFACTURER_NAME_EN_STANDARD, \
+						df_result.SPEC_ORIGINAL
 						))
 
 	df_result = df_result.withColumn("EFFTIVENESS_MOLE_NAME", df_result.EFFTIVENESS[0]) \
@@ -136,6 +137,7 @@ if __name__ == '__main__':
 
 	# df_result.show()
 	
+	# 更改优化eff的计算方法
 	# features
 	assembler = VectorAssembler( \
 					inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_SPEC", \

@@ -22,6 +22,14 @@ from pyspark.sql.functions import desc
 from pyspark.sql.functions import rank
 from pyspark.sql.functions import when
 from pyspark.sql.functions import col
+import numpy
+from pyspark.sql.types import *
+from pyspark.sql.functions import array, array_contains
+from pyspark.sql.functions import broadcast
+from pyspark.sql.functions import monotonically_increasing_id
+from pyspark.sql.functions import explode
+from pyspark.sql.functions import pandas_udf, PandasUDFType
+from math import isnan
 from pyspark.ml.linalg import Vectors, VectorUDT
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.feature import HashingTF, IDF, Tokenizer
@@ -164,7 +172,7 @@ def efftiveness_with_jaccard_distance(mo, ms, do, ds):
 	        jaro_winkler_sim = jaro_sim + ( l * p * (1 - jaro_sim) )
 """
 @pandas_udf(ArrayType(DoubleType()), PandasUDFType.SCALAR)
-def efftiveness_with_jaro_winkler_similarity(mo, ms, po, ps, do, ds, so, ss, qo, qs, mf, mfc, mfe):
+def efftiveness_with_jaro_winkler_similarity(mo, ms, po, ps, do, ds, so, ss, qo, qs, mf, mfc, mfe, spec):
 	def jaro_similarity(s1, s2):
 		# First, store the length of the strings
 		# because they will be re-used several times.
@@ -239,7 +247,8 @@ def efftiveness_with_jaro_winkler_similarity(mo, ms, po, ps, do, ds, so, ss, qo,
 		"DOSAGE": do, "DOSAGE_STANDARD": ds,
 		"SPEC": so, "SPEC_STANDARD": ss,
 		"PACK_QTY": qo, "PACK_QTY_STANDARD": qs,
-		"MANUFACTURER_NAME": mf, "MANUFACTURER_NAME_STANDARD": mfc, "MANUFACTURER_NAME_EN_STANDARD": mfe
+		"MANUFACTURER_NAME": mf, "MANUFACTURER_NAME_STANDARD": mfc, "MANUFACTURER_NAME_EN_STANDARD": mfe,
+		"SPEC_ORIGINAL": spec
 	}
 	df = pd.DataFrame(frame)
 
@@ -255,7 +264,8 @@ def efftiveness_with_jaro_winkler_similarity(mo, ms, po, ps, do, ds, so, ss, qo,
 										else 1 if x["SPEC"].strip() in x["SPEC_STANDARD"].strip() \
 										else 1 if x["SPEC_STANDARD"].strip() in x["SPEC"].strip() \
 										else jaro_winkler_similarity(x["SPEC"].strip(), x["SPEC_STANDARD"].strip()), axis=1)
-	df["PACK_QTY_JWS"] = df.apply(lambda x: 1 if x["PACK_QTY"].replace(".0", "") == x["PACK_QTY_STANDARD"].replace(".0", "") \
+	df["PACK_QTY_JWS"] = df.apply(lambda x: 1 if (x["PACK_QTY"].replace(".0", "") == x["PACK_QTY_STANDARD"].replace(".0", "")) \
+										| (("喷" in x["PACK_QTY"]) & (x["PACK_QTY"] in x["SPEC_ORIGINAL"])) \
 										else 0, axis=1)
 	df["MANUFACTURER_NAME_CH_JWS"] = df.apply(lambda x: 1 if x["MANUFACTURER_NAME"] in x ["MANUFACTURER_NAME_STANDARD"] \
 										else 1 if x["MANUFACTURER_NAME_STANDARD"] in x ["MANUFACTURER_NAME"] \
@@ -409,22 +419,13 @@ def spec_standify(df):
 
 def similarity(df):
 	df = df.withColumn("SIMILARITY", \
-					when(df.PRODUCT_NAME.contains(df.MOLE_NAME) | df.MOLE_NAME.contains(df.PRODUCT_NAME), \
-						1.2*df.EFFTIVENESS_MOLE_NAME + 1.2*df.EFFTIVENESS_DOSAGE \
-						+ 1.2*df.EFFTIVENESS_SPEC + 1.2*df.EFFTIVENESS_PACK_QTY + 1.2*df.EFFTIVENESS_MANUFACTURER) \
-					.otherwise(df.EFFTIVENESS_MOLE_NAME + df.EFFTIVENESS_PRODUCT_NAME + df.EFFTIVENESS_DOSAGE \
+					(df.EFFTIVENESS_MOLE_NAME + df.EFFTIVENESS_PRODUCT_NAME + df.EFFTIVENESS_DOSAGE \
 						+ df.EFFTIVENESS_SPEC + df.EFFTIVENESS_PACK_QTY + df.EFFTIVENESS_MANUFACTURER))
-
 	windowSpec = Window.partitionBy("id").orderBy(desc("SIMILARITY"), desc("EFFTIVENESS_MOLE_NAME"), desc("EFFTIVENESS_DOSAGE"), desc("PACK_ID_STANDARD"))
-
 	df = df.withColumn("RANK", rank().over(windowSpec))
-
-	# 写入给彭总
-
 	df = df.where((df.RANK <= 5) | (df.label == 1.0))
 	# df.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.3/result_analyse/all_similarity_rank5")
 	# print("写入完成")
-
 	return df
 
 
@@ -446,7 +447,7 @@ def dosage_replace(dosage_lst, dosage_standard, eff):
 
 
 @pandas_udf(DoubleType(), PandasUDFType.SCALAR)
-def prod_name_replace(mole_name, mole_name_standard, mnf_name, mnf_name_standard, mnf_en_standard):
+def  prod_name_replace(eff_mole_name, eff_mnf_name, eff_product_name):
 
 	def jaro_similarity(s1, s2):
 		# First, store the length of the strings
@@ -516,17 +517,13 @@ def prod_name_replace(mole_name, mole_name_standard, mnf_name, mnf_name_standard
 		return jaro_sim + (l * p * (1 - jaro_sim))
 
 
-	frame = { "MOLE_NAME": mole_name, "MOLE_NAME_STANDARD": mole_name_standard,
-			  "MANUFACTURER_NAME": mnf_name, "MANUFACTURER_NAME_STANDARD": mnf_name_standard, "MANUFACTURER_NAME_EN_STANDARD": mnf_en_standard }
+	frame = { "EFFTIVENESS_MOLE_NAME": eff_mole_name, "EFFTIVENESS_MANUFACTURER_SE": eff_mnf_name, "EFFTIVENESS_PRODUCT_NAME": eff_product_name }
 	df = pd.DataFrame(frame)
 
-	df["EFFTIVENESS_PROD"] = df.apply(lambda x: max((jaro_winkler_similarity((x["MOLE_NAME"] + x["MANUFACTURER_NAME"]), \
-																		(x["MOLE_NAME_STANDARD"] + x["MANUFACTURER_NAME_STANDARD"]))), \
-												(jaro_winkler_similarity((x["MOLE_NAME"] + x["MANUFACTURER_NAME"]), \
-																		(x["MOLE_NAME_STANDARD"] + x["MANUFACTURER_NAME_EN_STANDARD"])))), axis=1)
+	df["EFFTIVENESS_PROD"] = df.apply(lambda x: max((0.5* x["EFFTIVENESS_MOLE_NAME"] + 0.5* x["EFFTIVENESS_MANUFACTURER_SE"]), \
+								x["EFFTIVENESS_PRODUCT_NAME"]), axis=1)
 
 	return df["EFFTIVENESS_PROD"]
-
 
 @pandas_udf(DoubleType(), PandasUDFType.SCALAR)
 def pack_replace(eff_pack, spec_original, pack_qty, pack_standard):
@@ -561,8 +558,9 @@ def manifacture_name_pseg_cut(mnf):
 		"MANUFACTURER_NAME_STANDARD": mnf,
 	}
 	df = pd.DataFrame(frame)
-	lexicon = ["优时比", "省", "市", "第一三共", "诺维诺", "药业", "医药", "在田", "人人康", \
-				"健朗", "鑫威格", "景康", "皇甫谧", "安徽", "江中高邦", "鲁抗", "辰欣", "法玛西亚普强", "正大天晴", "拜耳", "三才"]
+	df_lexicon = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/lexicon")
+	df_pd = df_lexicon.toPandas()  # type = pd.df
+	lexicon = df_pd["HIGH_SCORE_WORDS"].tolist()  # type = list
 	seg = pkuseg.pkuseg(user_dict=lexicon)
 
 	df["MANUFACTURER_NAME_STANDARD_WORDS"] = df["MANUFACTURER_NAME_STANDARD"].apply(lambda x: seg.cut(x))
@@ -609,8 +607,8 @@ def phcleanning_mnf_seg(df_standard, inputCol, outputCol):
 	# 4. 分词之后构建词库编码
 	# 4.1 stop word remover 去掉不需要的词
 	stopWords = ["省", "市", "股份", "有限", "总公司", "公司", "集团", "制药", "总厂", "厂", "药业", "责任", "医药", "(", ")", "（", "）", \
-				 "有限公司", "股份", "控股", "集团", "总公司", "公司", "有限", "有限责任", \
-			     "药业", "医药", "制药", "制药厂", "控股集团", "医药集团", "控股集团", "集团股份", "药厂", "分公司", "-", ".", "-", "·", ":"]
+				 "有限公司", "股份", "控股", "集团", "总公司", "公司", "有限", "有限责任", "大药厂", \
+			     "药业", "医药", "制药", "制药厂", "控股集团", "医药集团", "控股集团", "集团股份", "药厂", "分公司", "-", ".", "-", "·", ":", ","]
 	remover = StopWordsRemover(stopWords=stopWords, inputCol="MANUFACTURER_NAME_WORDS", outputCol=outputCol)
 
 	return remover.transform(df_standard).drop("MANUFACTURER_NAME_WORDS")
@@ -630,4 +628,71 @@ def words_to_reverse_index(df_cleanning, df_encode, inputCol, outputCol):
 	df_cleanning = df_cleanning.join(df_indexing, on="tid", how="left")
 	df_cleanning = df_cleanning.withColumn(outputCol, df_cleanning.INDEX_ENCODE)
 	df_cleanning = df_cleanning.drop("tid", "INDEX_ENCODE", "MANUFACTURER_NAME_STANDARD_WORD_LIST")
+	return df_cleanning
+
+
+def mnf_encoding_index(df_cleanning, df_encode):
+	# 增加两列MANUFACTURER_NAME_CLEANNING_WORDS MANUFACTURER_NAME_STANDARD_WORDS - array(string)
+	df_cleanning = phcleanning_mnf_seg(df_cleanning, "MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_STANDARD_WORDS")
+	df_cleanning = phcleanning_mnf_seg(df_cleanning, "MANUFACTURER_NAME", "MANUFACTURER_NAME_CLEANNING_WORDS")
+	# df_cleanning.where((df_cleanning.label == 1.0) & (df_cleanning.EFFTIVENESS_MANUFACTURER < 0.9)) \
+	# 	.select("MANUFACTURER_NAME", "MANUFACTURER_NAME_CLEANNING_WORDS", "MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_STANDARD_WORDS", "EFFTIVENESS_MANUFACTURER").show(10)
+
+	df_cleanning = words_to_reverse_index(df_cleanning, df_encode, "MANUFACTURER_NAME_STANDARD_WORDS", "MANUFACTURER_NAME_STANDARD_WORDS")
+	df_cleanning = words_to_reverse_index(df_cleanning, df_encode, "MANUFACTURER_NAME_CLEANNING_WORDS", "MANUFACTURER_NAME_CLEANNING_WORDS")
+	# df_cleanning.where((df_cleanning.label == 1.0) & (df_cleanning.EFFTIVENESS_MANUFACTURER < 0.9)) \
+	# 	.select("MANUFACTURER_NAME", "MANUFACTURER_NAME_CLEANNING_WORDS", "MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_STANDARD_WORDS", "EFFTIVENESS_MANUFACTURER").show(10)
+	return df_cleanning
+
+	# df_cleanning.repartition(10).write.mode("overwrite").parquet(words_index_path)
+
+
+@pandas_udf(DoubleType(), PandasUDFType.SCALAR)
+def mnf_index_word_cosine_similarity(o, v):
+	frame = {
+		"CLEANNING": o,
+		"STANDARD": v
+	}
+	df = pd.DataFrame(frame)
+
+	def array_to_vector(arr):
+		idx = []
+		values = []
+		s = list(set(arr))
+		s.sort()
+		for item in s:
+			if isnan(item):
+				idx.append(7999)
+				values.append(1)
+				break
+			else:
+				idx.append(item)
+				if item < 2000:
+					values.append(2)
+				elif (item >= 2000) & (item < 5000):
+					values.append(10)
+				else:
+					values.append(1)
+
+		return Vectors.sparse(8000, idx, values)
+		#                    (向量长度，索引数组，与索引数组对应的数值数组)
+
+
+	def cosine_distance(u, v):
+		u = u.toArray()
+		v = v.toArray()
+		return float(numpy.dot(u, v) / (sqrt(numpy.dot(u, u)) * sqrt(numpy.dot(v, v))))
+
+	df["CLENNING_FEATURE"] = df["CLEANNING"].apply(lambda x: array_to_vector(x))
+	df["STANDARD_FEATURE"] = df["STANDARD"].apply(lambda x: array_to_vector(x))
+	df["RESULT"] = df.apply(lambda x: cosine_distance(x["CLENNING_FEATURE"], x["STANDARD_FEATURE"]), axis=1)
+	return df["RESULT"]
+
+
+def mnf_encoding_cosine(df_cleanning):
+	df_cleanning = df_cleanning.withColumn("COSINE_SIMILARITY", \
+					mnf_index_word_cosine_similarity(df_cleanning.MANUFACTURER_NAME_CLEANNING_WORDS, df_cleanning.MANUFACTURER_NAME_STANDARD_WORDS))
+	# df_cleanning.where((df_cleanning.label == 1.0) & (df_cleanning.EFFTIVENESS_MANUFACTURER < 0.9) & (df_cleanning.COSINE_SIMILARITY > df_cleanning.EFFTIVENESS_MANUFACTURER)) \
+	# 	.select("MANUFACTURER_NAME", "MANUFACTURER_NAME_CLEANNING_WORDS", "MANUFACTURER_NAME_STANDARD", \
+	# 			"MANUFACTURER_NAME_STANDARD_WORDS", "EFFTIVENESS_MANUFACTURER", "COSINE_SIMILARITY").show(100)
 	return df_cleanning
