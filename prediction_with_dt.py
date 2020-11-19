@@ -131,6 +131,7 @@ if __name__ == '__main__':
 	# 第二轮筛选的方法是：再对dosage等列重新计算eff，要用到dosage_mapping
 	df_second_round = df_candidate.drop("prediction", "indexedLabel", "indexedFeatures", "rawPrediction", "probability", "features")
 	dosage_mapping = load_dosage_mapping(spark)
+	
 	df_second_round = df_second_round.join(dosage_mapping, df_second_round.DOSAGE == dosage_mapping.CPA_DOSAGE, how="left").na.fill("")
 	df_second_round = df_second_round.withColumn("EFFTIVENESS_DOSAGE_SE", dosage_replace(df_second_round.MASTER_DOSAGE, \
 														df_second_round.DOSAGE_STANDARD, df_second_round.EFFTIVENESS_DOSAGE)) 
