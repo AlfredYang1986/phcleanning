@@ -19,9 +19,9 @@ from pyspark.sql.functions import upper
 from pyspark.sql.functions import lit
 from pyspark.sql.functions import concat
 from pyspark.sql.functions import desc
-from pyspark.sql.functions import rank
+from pyspark.sql.functions import rank, row_number
 from pyspark.sql.functions import when
-from pyspark.sql.functions import col
+from pyspark.sql.functions import col, udf
 import numpy
 from pyspark.sql.types import *
 from pyspark.sql.functions import array, array_contains
@@ -86,12 +86,12 @@ def dosage_standify(df):
 	通过计算字符串的编辑距离，以及包含关系来确定某一项的距离
 
 	Calculate the Levenshtein edit-distance between two strings.
-    The edit distance is the number of characters that need to be
-    substituted, inserted, or deleted, to transform s1 into s2.  For
-    example, transforming "rain" to "shine" requires three steps,
-    consisting of two substitutions and one insertion:
-    "rain" -> "sain" -> "shin" -> "shine".  These operations could have
-    been done in other orders, but at least three steps are needed.
+	The edit distance is the number of characters that need to be
+	substituted, inserted, or deleted, to transform s1 into s2.  For
+	example, transforming "rain" to "shine" requires three steps,
+	consisting of two substitutions and one insertion:
+	"rain" -> "sain" -> "shin" -> "shine".  These operations could have
+	been done in other orders, but at least three steps are needed.
 """
 @pandas_udf(ArrayType(DoubleType()), PandasUDFType.SCALAR)
 def efftiveness_with_edit_distance(mo, ms, po, ps, do, ds, so, ss, qo, qs, mf, mfc, mfe):
@@ -163,13 +163,13 @@ def efftiveness_with_jaccard_distance(mo, ms, do, ds):
 
 	The Jaro Winkler distance is an extension of the Jaro similarity in:
 
-	        William E. Winkler. 1990. String Comparator Metrics and Enhanced
-	        Decision Rules in the Fellegi-Sunter Model of Record Linkage.
-	        Proceedings of the Section on Survey Research Methods.
-	        American Statistical Association: 354-359.
-	    such that:
+			William E. Winkler. 1990. String Comparator Metrics and Enhanced
+			Decision Rules in the Fellegi-Sunter Model of Record Linkage.
+			Proceedings of the Section on Survey Research Methods.
+			American Statistical Association: 354-359.
+		such that:
 
-	        jaro_winkler_sim = jaro_sim + ( l * p * (1 - jaro_sim) )
+			jaro_winkler_sim = jaro_sim + ( l * p * (1 - jaro_sim) )
 """
 @pandas_udf(ArrayType(DoubleType()), PandasUDFType.SCALAR)
 def efftiveness_with_jaro_winkler_similarity(mo, ms, po, ps, do, ds, so, ss, qo, qs, mf, mfc, mfe, spec):
@@ -218,7 +218,7 @@ def efftiveness_with_jaro_winkler_similarity(mo, ms, po, ps, do, ds, so, ss, qo,
 
 	def jaro_winkler_similarity(s1, s2, p=0.1, max_l=4):
 		if not 0 <= max_l * p <= 1:
-		    print("The product  `max_l * p` might not fall between [0,1].Jaro-Winkler similarity might not be between 0 and 1.")
+			print("The product  `max_l * p` might not fall between [0,1].Jaro-Winkler similarity might not be between 0 and 1.")
 
 		# Compute the Jaro similarity
 		jaro_sim = jaro_similarity(s1, s2)
@@ -422,7 +422,7 @@ def similarity(df):
 					(df.EFFTIVENESS_MOLE_NAME + df.EFFTIVENESS_PRODUCT_NAME + df.EFFTIVENESS_DOSAGE \
 						+ df.EFFTIVENESS_SPEC + df.EFFTIVENESS_PACK_QTY + df.EFFTIVENESS_MANUFACTURER))
 	windowSpec = Window.partitionBy("id").orderBy(desc("SIMILARITY"), desc("EFFTIVENESS_MOLE_NAME"), desc("EFFTIVENESS_DOSAGE"), desc("PACK_ID_STANDARD"))
-	df = df.withColumn("RANK", rank().over(windowSpec))
+	df = df.withColumn("RANK", row_number().over(windowSpec))
 	df = df.where((df.RANK <= 5) | (df.label == 1.0))
 	# df.repartition(1).write.format("parquet").mode("overwrite").save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.3/result_analyse/all_similarity_rank5")
 	# print("写入完成")
@@ -446,8 +446,86 @@ def dosage_replace(dosage_lst, dosage_standard, eff):
 	return df["EFFTIVENESS"]
 
 
+def mole_dosage_calculaltion(df):
+	
+	def jaro_similarity(s1, s2):
+		# First, store the length of the strings
+		# because they will be re-used several times.
+		len_s1, len_s2 = len(s1), len(s2)
+
+		# The upper bound of the distance for being a matched character.
+		match_bound = max(len_s1, len_s2) // 2 - 1
+
+		# Initialize the counts for matches and transpositions.
+		matches = 0  # no.of matched characters in s1 and s2
+		transpositions = 0  # no. of transpositions between s1 and s2
+		flagged_1 = []  # positions in s1 which are matches to some character in s2
+		flagged_2 = []  # positions in s2 which are matches to some character in s1
+
+		# Iterate through sequences, check for matches and compute transpositions.
+		for i in range(len_s1):  # Iterate through each character.
+			upperbound = min(i + match_bound, len_s2 - 1)
+			lowerbound = max(0, i - match_bound)
+			for j in range(lowerbound, upperbound + 1):
+				if s1[i] == s2[j] and j not in flagged_2:
+					matches += 1
+					flagged_1.append(i)
+					flagged_2.append(j)
+					break
+		flagged_2.sort()
+		for i, j in zip(flagged_1, flagged_2):
+			if s1[i] != s2[j]:
+				transpositions += 1
+
+		if matches == 0:
+			return 0
+		else:
+			return (
+				1
+				/ 3
+				* (
+					matches / len_s1
+					+ matches / len_s2
+					+ (matches - transpositions // 2) / matches
+				)
+			)
+
+	@udf(returnType=DoubleType())
+	def jaro_winkler_similarity(s1, s2, p=0.1, max_l=4):
+		if not 0 <= max_l * p <= 1:
+			print("The product  `max_l * p` might not fall between [0,1].Jaro-Winkler similarity might not be between 0 and 1.")
+
+		# Compute the Jaro similarity
+		jaro_sim = jaro_similarity(s1, s2)
+
+		# Initialize the upper bound for the no. of prefixes.
+		# if user did not pre-define the upperbound,
+		# use shorter length between s1 and s2
+
+		# Compute the prefix matches.
+		l = 0
+		# zip() will automatically loop until the end of shorter string.
+		for s1_i, s2_i in zip(s1, s2):
+			if s1_i == s2_i:
+				l += 1
+			else:
+				break
+			if l == max_l:
+				break
+		# Return the similarity value as described in docstring.
+		return jaro_sim + (l * p * (1 - jaro_sim))
+
+	# 给df 增加一列：EFF_MOLE_DOSAGE
+	df_dosage_explode = df.withColumn("MASTER_DOSAGES", explode("MASTER_DOSAGE"))
+	df_dosage_explode = df_dosage_explode.withColumn("MOLE_DOSAGE", concat(df_dosage_explode.MOLE_NAME, df_dosage_explode.MASTER_DOSAGES))
+	df_dosage_explode = df_dosage_explode.withColumn("jws", jaro_winkler_similarity(df_dosage_explode.MOLE_DOSAGE, df_dosage_explode.PRODUCT_NAME_STANDARD))
+	df_dosage_explode = df_dosage_explode.groupBy('id').agg({"jws":"max"}).withColumnRenamed("max(jws)","EFF_MOLE_DOSAGE")
+	df_dosage = df.join(df_dosage_explode, "id", how="left")
+	
+	return df_dosage
+
 @pandas_udf(DoubleType(), PandasUDFType.SCALAR)
-def  prod_name_replace(eff_mole_name, eff_mnf_name, eff_product_name):
+def prod_name_replace(eff_mole_name, eff_mnf_name, eff_product_name, mole_name, prod_name_standard, eff_mole_dosage):
 
 	def jaro_similarity(s1, s2):
 		# First, store the length of the strings
@@ -494,7 +572,7 @@ def  prod_name_replace(eff_mole_name, eff_mnf_name, eff_product_name):
 
 	def jaro_winkler_similarity(s1, s2, p=0.1, max_l=4):
 		if not 0 <= max_l * p <= 1:
-		    print("The product  `max_l * p` might not fall between [0,1].Jaro-Winkler similarity might not be between 0 and 1.")
+			print("The product  `max_l * p` might not fall between [0,1].Jaro-Winkler similarity might not be between 0 and 1.")
 
 		# Compute the Jaro similarity
 		jaro_sim = jaro_similarity(s1, s2)
@@ -517,11 +595,15 @@ def  prod_name_replace(eff_mole_name, eff_mnf_name, eff_product_name):
 		return jaro_sim + (l * p * (1 - jaro_sim))
 
 
-	frame = { "EFFTIVENESS_MOLE_NAME": eff_mole_name, "EFFTIVENESS_MANUFACTURER_SE": eff_mnf_name, "EFFTIVENESS_PRODUCT_NAME": eff_product_name }
+	frame = { "EFFTIVENESS_MOLE_NAME": eff_mole_name, "EFFTIVENESS_MANUFACTURER_SE": eff_mnf_name, "EFFTIVENESS_PRODUCT_NAME": eff_product_name,
+			  "MOLE_NAME": mole_name, "PRODUCT_NAME_STANDARD": prod_name_standard, "EFF_MOLE_DOSAGE": eff_mole_dosage,}
 	df = pd.DataFrame(frame)
 
 	df["EFFTIVENESS_PROD"] = df.apply(lambda x: max((0.5* x["EFFTIVENESS_MOLE_NAME"] + 0.5* x["EFFTIVENESS_MANUFACTURER_SE"]), \
-								x["EFFTIVENESS_PRODUCT_NAME"]), axis=1)
+									# (x["EFFTIVENESS_PRODUCT_NAME"])), axis=1)
+								(x["EFFTIVENESS_PRODUCT_NAME"]), \
+								(jaro_winkler_similarity(x["MOLE_NAME"], x["PRODUCT_NAME_STANDARD"])), \
+								(x["EFF_MOLE_DOSAGE"])), axis=1)
 
 	return df["EFFTIVENESS_PROD"]
 
@@ -558,9 +640,15 @@ def manifacture_name_pseg_cut(mnf):
 		"MANUFACTURER_NAME_STANDARD": mnf,
 	}
 	df = pd.DataFrame(frame)
-	df_lexicon = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/lexicon")
-	df_pd = df_lexicon.toPandas()  # type = pd.df
-	lexicon = df_pd["HIGH_SCORE_WORDS"].tolist()  # type = list
+	# df_lexicon = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/lexicon")
+	# df_pd = df_lexicon.toPandas()  # type = pd.df
+	# lexicon = df_pd["HIGH_SCORE_WORDS"].tolist()  # type = list
+	lexicon = ["优时比", "省", "市", "第一三共", "诺维诺", "药业", "医药", "在田", "人人康", "金蟾", "爱可泰隆", "安科生物", "余良卿", "城市", ""\
+				"健朗", "鑫威格", "景康", "皇甫谧", "安徽", "江中高邦", "鲁抗", "辰欣", "法玛西亚普强", "正大天晴", "拜耳", "三才", "仁和", \
+				"先求", "山德士", "依比威", "澳美", "百济神州", "百泰", "百泰", "百正", "拜耳先灵", "包头中药", "北大维信", "北生研", "北医联合", "第一生物", "费森尤斯卡比",\
+				"费森尤斯卡比", "韩美", "华润高科", "九发", "康必得", "赛而", "四环生物", "四环制药", "优你特", "比奥罗历加", "得能", "雷允上", "千红", \
+				"佛都", "九泓", "华神生物", "康弘生物", "康弘药业", "力思特", "赛林泰", "万泽", "和创", "老拨云堂", "大连生物", "医创药业", "医创中药", \
+				"爱活", "马博士", "金美济", "3M", "百科达", "赛特多", "益普生", "法玛西亚", "珐博进", "德芮可", "天和", "大药厂"]
 	seg = pkuseg.pkuseg(user_dict=lexicon)
 
 	df["MANUFACTURER_NAME_STANDARD_WORDS"] = df["MANUFACTURER_NAME_STANDARD"].apply(lambda x: seg.cut(x))
@@ -608,7 +696,7 @@ def phcleanning_mnf_seg(df_standard, inputCol, outputCol):
 	# 4.1 stop word remover 去掉不需要的词
 	stopWords = ["省", "市", "股份", "有限", "总公司", "公司", "集团", "制药", "总厂", "厂", "药业", "责任", "医药", "(", ")", "（", "）", \
 				 "有限公司", "股份", "控股", "集团", "总公司", "公司", "有限", "有限责任", "大药厂", \
-			     "药业", "医药", "制药", "制药厂", "控股集团", "医药集团", "控股集团", "集团股份", "药厂", "分公司", "-", ".", "-", "·", ":", ","]
+				 "药业", "医药", "制药", "制药厂", "控股集团", "医药集团", "控股集团", "集团股份", "药厂", "分公司", "-", ".", "-", "·", ":", ","]
 	remover = StopWordsRemover(stopWords=stopWords, inputCol="MANUFACTURER_NAME_WORDS", outputCol=outputCol)
 
 	return remover.transform(df_standard).drop("MANUFACTURER_NAME_WORDS")
@@ -622,7 +710,7 @@ def word_index_to_array(v):
 def words_to_reverse_index(df_cleanning, df_encode, inputCol, outputCol):
 	df_cleanning = df_cleanning.withColumn("tid", monotonically_increasing_id())
 	df_indexing = df_cleanning.withColumn("MANUFACTURER_NAME_STANDARD_WORD_LIST", explode(col(inputCol)))
-	df_indexing = df_indexing.join(df_encode, df_indexing.MANUFACTURER_NAME_STANDARD_WORD_LIST == df_encode.WORD, how="left")
+	df_indexing = df_indexing.join(df_encode, df_indexing.MANUFACTURER_NAME_STANDARD_WORD_LIST == df_encode.WORD, how="left").na.fill(7999)
 	df_indexing = df_indexing.groupBy("tid").agg(word_index_to_array(df_indexing.ENCODE).alias("INDEX_ENCODE"))
 
 	df_cleanning = df_cleanning.join(df_indexing, on="tid", how="left")
@@ -637,7 +725,6 @@ def mnf_encoding_index(df_cleanning, df_encode):
 	df_cleanning = phcleanning_mnf_seg(df_cleanning, "MANUFACTURER_NAME", "MANUFACTURER_NAME_CLEANNING_WORDS")
 	# df_cleanning.where((df_cleanning.label == 1.0) & (df_cleanning.EFFTIVENESS_MANUFACTURER < 0.9)) \
 	# 	.select("MANUFACTURER_NAME", "MANUFACTURER_NAME_CLEANNING_WORDS", "MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_STANDARD_WORDS", "EFFTIVENESS_MANUFACTURER").show(10)
-
 	df_cleanning = words_to_reverse_index(df_cleanning, df_encode, "MANUFACTURER_NAME_STANDARD_WORDS", "MANUFACTURER_NAME_STANDARD_WORDS")
 	df_cleanning = words_to_reverse_index(df_cleanning, df_encode, "MANUFACTURER_NAME_CLEANNING_WORDS", "MANUFACTURER_NAME_CLEANNING_WORDS")
 	# df_cleanning.where((df_cleanning.label == 1.0) & (df_cleanning.EFFTIVENESS_MANUFACTURER < 0.9)) \
@@ -654,7 +741,6 @@ def mnf_index_word_cosine_similarity(o, v):
 		"STANDARD": v
 	}
 	df = pd.DataFrame(frame)
-
 	def array_to_vector(arr):
 		idx = []
 		values = []
@@ -673,16 +759,12 @@ def mnf_index_word_cosine_similarity(o, v):
 					values.append(10)
 				else:
 					values.append(1)
-
 		return Vectors.sparse(8000, idx, values)
 		#                    (向量长度，索引数组，与索引数组对应的数值数组)
-
-
 	def cosine_distance(u, v):
 		u = u.toArray()
 		v = v.toArray()
 		return float(numpy.dot(u, v) / (sqrt(numpy.dot(u, u)) * sqrt(numpy.dot(v, v))))
-
 	df["CLENNING_FEATURE"] = df["CLEANNING"].apply(lambda x: array_to_vector(x))
 	df["STANDARD_FEATURE"] = df["STANDARD"].apply(lambda x: array_to_vector(x))
 	df["RESULT"] = df.apply(lambda x: cosine_distance(x["CLENNING_FEATURE"], x["STANDARD_FEATURE"]), axis=1)
