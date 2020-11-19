@@ -157,13 +157,13 @@ if __name__ == '__main__':
 	# df_second_round.repartition(10).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/second_round_dt")
 	
 	predictions_second_round = model.transform(df_second_round)
-	predictions_second_round = predictions_second_round.drop("EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_PACK_QTY", "EFFTIVENESS_MANUFACTURER")
+	predictions_second_round = predictions_second_round.withColumnRenamed("EFFTIVENESS_PRODUCT_NAME", "EFF_PRODUCT_NAME_FIRST").drop("EFFTIVENESS_DOSAGE", "EFFTIVENESS_PACK_QTY", "EFFTIVENESS_MANUFACTURER")
 	predictions_second_round = predictions_second_round.withColumnRenamed("EFFTIVENESS_PRODUCT_NAME_SE", "EFFTIVENESS_PRODUCT_NAME") \
 																.withColumnRenamed("EFFTIVENESS_DOSAGE_SE", "EFFTIVENESS_DOSAGE") \
 																.withColumnRenamed("EFFTIVENESS_MANUFACTURER_SE", "EFFTIVENESS_MANUFACTURER") \
 																.withColumnRenamed("EFFTIVENESS_PACK_QTY_SE", "EFFTIVENESS_PACK_QTY")
 	predictions_second_round = similarity(predictions_second_round)
-	predictions_second_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/second_round_1119_na_fill")
+	predictions_second_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/second_round_1119_prodname")
 	
 	evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
 	accuracy = evaluator.evaluate(predictions_second_round)
