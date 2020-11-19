@@ -9,14 +9,14 @@ from dataparepare import *
 from interfere import *
 from pyspark.sql.types import *
 from pyspark.sql.functions import desc
-from pyspark.sql.functions import rank, lit, when
+from pyspark.sql.functions import rank, lit, when, row_number
 from pyspark.sql import Window
 from pyspark.ml.linalg import Vectors, VectorUDT
 from pyspark.ml.classification import MultilayerPerceptronClassificationModel
 from pyspark.ml.classification import DecisionTreeClassificationModel
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.ml import PipelineModel
-from pdu_feature import similarity, hit_place_prediction, dosage_replace, prod_name_replace, pack_replace, mnf_encoding_index, mnf_encoding_cosine
+from pdu_feature import similarity, hit_place_prediction, dosage_replace, prod_name_replace, pack_replace, mnf_encoding_index, mnf_encoding_cosine, mole_dosage_calculaltion
 from pyspark.ml.feature import VectorAssembler
 
 
@@ -134,7 +134,6 @@ if __name__ == '__main__':
 	df_second_round = df_second_round.join(dosage_mapping, df_second_round.DOSAGE == dosage_mapping.CPA_DOSAGE, how="left").na.fill("")
 	df_second_round = df_second_round.withColumn("EFFTIVENESS_DOSAGE_SE", dosage_replace(df_second_round.MASTER_DOSAGE, \
 														df_second_round.DOSAGE_STANDARD, df_second_round.EFFTIVENESS_DOSAGE)) 
-	
 	df_second_round = df_second_round.withColumn("EFFTIVENESS_PACK_QTY_SE", pack_replace(df_second_round.EFFTIVENESS_PACK_QTY, df_second_round.SPEC_ORIGINAL, \
 														df_second_round.PACK_QTY, df_second_round.PACK_QTY_STANDARD))
 	df_second_round = mnf_encoding_index(df_second_round, df_encode)
@@ -142,8 +141,12 @@ if __name__ == '__main__':
 	df_second_round = df_second_round.withColumn("EFFTIVENESS_MANUFACTURER_SE", \
 										when(df_second_round.COSINE_SIMILARITY >= df_second_round.EFFTIVENESS_MANUFACTURER, df_second_round.COSINE_SIMILARITY) \
 										.otherwise(df_second_round.EFFTIVENESS_MANUFACTURER))
+	df_second_round = mole_dosage_calculaltion(df_second_round)   # 加一列EFF_MOLE_DOSAGE，doubletype
+	df_second_round.printSchema()
 	df_second_round = df_second_round.withColumn("EFFTIVENESS_PRODUCT_NAME_SE", \
-								prod_name_replace(df_second_round.EFFTIVENESS_MOLE_NAME, df_second_round.EFFTIVENESS_MANUFACTURER_SE, df_second_round.EFFTIVENESS_PRODUCT_NAME))
+								prod_name_replace(df_second_round.EFFTIVENESS_MOLE_NAME, df_second_round.EFFTIVENESS_MANUFACTURER_SE, \
+												df_second_round.EFFTIVENESS_PRODUCT_NAME, df_second_round.MOLE_NAME, \
+												df_second_round.PRODUCT_NAME_STANDARD, df_second_round.EFF_MOLE_DOSAGE))
 	
 	
 	assembler = VectorAssembler( \
@@ -154,7 +157,14 @@ if __name__ == '__main__':
 	# df_second_round.repartition(10).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/second_round_dt")
 	
 	predictions_second_round = model.transform(df_second_round)
-	# predictions_second_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/second_round_prediction_1")
+	predictions_second_round = predictions_second_round.withColumnRenamed("EFFTIVENESS_PRODUCT_NAME", "EFF_PRODUCT_NAME_FIRST").drop("EFFTIVENESS_DOSAGE", "EFFTIVENESS_PACK_QTY", "EFFTIVENESS_MANUFACTURER")
+	predictions_second_round = predictions_second_round.withColumnRenamed("EFFTIVENESS_PRODUCT_NAME_SE", "EFFTIVENESS_PRODUCT_NAME") \
+																.withColumnRenamed("EFFTIVENESS_DOSAGE_SE", "EFFTIVENESS_DOSAGE") \
+																.withColumnRenamed("EFFTIVENESS_MANUFACTURER_SE", "EFFTIVENESS_MANUFACTURER") \
+																.withColumnRenamed("EFFTIVENESS_PACK_QTY_SE", "EFFTIVENESS_PACK_QTY")
+	predictions_second_round = similarity(predictions_second_round)
+	predictions_second_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/second_round_1119_prodname")
+	
 	evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
 	accuracy = evaluator.evaluate(predictions_second_round)
 	print("Test Error = %g " % (1.0 - accuracy))
@@ -164,7 +174,7 @@ if __name__ == '__main__':
 	# xixi1.to_excel('predictions_second_round_mnf.xlsx', index = False)
 	
 	# 第二轮正确率检测
-	df_true_positive_se = predictions_second_round.where(predictions_second_round.prediction == 1.0)
+	df_true_positive_se = predictions_second_round.where((predictions_second_round.prediction == 1.0) & (predictions_second_round.RANK == 1))
 	machine_right_2 = df_true_positive_se
 	ph_positive_prodict_se = df_true_positive_se.count()
 	print("机器判断第二轮TP条目 = " + str(ph_positive_prodict_se))
@@ -224,7 +234,7 @@ if __name__ == '__main__':
 	
 	# 机器判断无法匹配
 	# prediction_third_round = df_candidate_third.where(df_candidate_third.SIMILARITY > 3.0)
-	df_candidate_third.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_1117qilu")
+	# df_candidate_third.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_1117qilu")
 	# df_candidate_third.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_1113az")
 	# prediction_third_round = df_candidate_third.where(df_candidate_third.SIMILARITY > 4.0)
 	# prediction_third_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/third_round_4")
