@@ -25,7 +25,7 @@ import re
 import pandas as pd
 
 
-
+ 
 # @尹 代码不允许出现全局变量,每一个变量必须有规定的生命周期
 split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.9/splitdata"
 training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.9/tmp/data3"
