@@ -24,8 +24,8 @@ from pyspark.sql.types import *
 # training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.5/tmp/data3"
 
 raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/raw_data"
-split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.8/splitdata"
-training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.8/tmp/data3"
+split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.9/splitdata"
+training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.9/tmp/data3"
 
 # raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/az/raw_data"
 # split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/az/0.0.1/splitdata"
@@ -107,7 +107,8 @@ def modify_pool_cleanning_prod(spark):
 	 
 	 #df_cleanning = df_cleanning.readStream.withColumn("id", monotonically_increasing_id())
 	 print("源数据条目： "+ str(df_cleanning.count()))
-	 df_cleanning.show()
+	 print("源数据：")
+	 df_cleanning.show(3)
 
 	 # 为了算法更高的并发，在这里将文件拆分为16个，然后以16的并发数开始跑人工智能
 	 df_cleanning.write.mode("overwrite").parquet(split_data_path)

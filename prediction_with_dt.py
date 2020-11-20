@@ -76,7 +76,7 @@ if __name__ == '__main__':
 	# result.printSchema()
 	result = result.withColumn("JACCARD_DISTANCE_MOLE_NAME", result.JACCARD_DISTANCE[0]) \
 				.withColumn("JACCARD_DISTANCE_DOSAGE", result.JACCARD_DISTANCE[1]) \
-				.drop("JACCARD_DISTANCE", "features", "indexedFeatures").drop("rawPrediction", "probability")
+				.drop("JACCARD_DISTANCE", "indexedFeatures").drop("rawPrediction", "probability")
 	# result.orderBy("id").repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/result")
 	df_ph = result.where((result.prediction == 1.0) | (result.label == 1.0))
 	ph_total = result.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
@@ -127,9 +127,12 @@ if __name__ == '__main__':
 	df_candidate = result.where(~result.id.isin(id_local)) # df_candidate 是上一步选出的TP的剩下的数据，进行第二轮
 	count_prediction_se = df_candidate.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
 	print("第二轮总量= " + str(count_prediction_se))
-	
+	df_candidate.printSchema()
 	# 第二轮筛选的方法是：再对dosage等列重新计算eff，要用到dosage_mapping
-	df_second_round = df_candidate.drop("prediction", "indexedLabel", "indexedFeatures", "rawPrediction", "probability", "features")
+	df_second_round = df_candidate.drop("prediction", "indexedLabel", "indexedFeatures", "rawPrediction", "probability", "MASTER_DOSAGE", \
+								"MANUFACTURER_NAME_STANDARD_WORDS", "MANUFACTURER_NAME_CLEANNING_WORDS", "COSINE_SIMILARITY", "EFF_MOLE_DOSAGE", "CPA_DOSAGE", "MASTER_DOSAGE")
+	df_second_round = df_second_round.withColumnRenamed("features", "features_first")
+	df_second_round.printSchema()
 	dosage_mapping = load_dosage_mapping(spark)
 	
 	df_second_round = df_second_round.join(dosage_mapping, df_second_round.DOSAGE == dosage_mapping.CPA_DOSAGE, how="left").na.fill("")
@@ -143,7 +146,7 @@ if __name__ == '__main__':
 										when(df_second_round.COSINE_SIMILARITY >= df_second_round.EFFTIVENESS_MANUFACTURER, df_second_round.COSINE_SIMILARITY) \
 										.otherwise(df_second_round.EFFTIVENESS_MANUFACTURER))
 	df_second_round = mole_dosage_calculaltion(df_second_round)   # 加一列EFF_MOLE_DOSAGE，doubletype
-	df_second_round.printSchema()
+	
 	df_second_round = df_second_round.withColumn("EFFTIVENESS_PRODUCT_NAME_SE", \
 								prod_name_replace(df_second_round.EFFTIVENESS_MOLE_NAME, df_second_round.EFFTIVENESS_MANUFACTURER_SE, \
 												df_second_round.EFFTIVENESS_PRODUCT_NAME, df_second_round.MOLE_NAME, \
@@ -164,7 +167,7 @@ if __name__ == '__main__':
 																.withColumnRenamed("EFFTIVENESS_MANUFACTURER_SE", "EFFTIVENESS_MANUFACTURER") \
 																.withColumnRenamed("EFFTIVENESS_PACK_QTY_SE", "EFFTIVENESS_PACK_QTY")
 	predictions_second_round = similarity(predictions_second_round)
-	predictions_second_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/second_round_1119_prodname")
+	predictions_second_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/second_round_1120")
 	
 	evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
 	accuracy = evaluator.evaluate(predictions_second_round)

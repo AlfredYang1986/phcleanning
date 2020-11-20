@@ -408,7 +408,6 @@ def spec_standify(df):
 	df = df.na.fill("")
 	df = df.withColumn("SPEC_valid", transfer_unit_pandas_udf(df.SPEC_valid))
 	df = df.withColumn("SPEC_gross", transfer_unit_pandas_udf(df.SPEC_gross))
-	df.show()
 	df = df.drop("SPEC_gross_digit", "SPEC_gross_unit", "SPEC_valid_digit", "SPEC_valid_unit")
 	df = df.withColumn("SPEC_percent", percent_pandas_udf(df.SPEC_percent, df.SPEC_valid, df.SPEC_gross))
 	df = df.withColumn("SPEC_ept", lit(" "))
@@ -440,7 +439,7 @@ def dosage_replace(dosage_lst, dosage_standard, eff):
 	frame = { "MASTER_DOSAGE": dosage_lst, "DOSAGE_STANDARD": dosage_standard, "EFFTIVENESS_DOSAGE": eff }
 	df = pd.DataFrame(frame)
 
-	df["EFFTIVENESS"] = df.apply(lambda x: 1.0 if x["DOSAGE_STANDARD"] in x["MASTER_DOSAGE"] \
+	df["EFFTIVENESS"] = df.apply(lambda x: 1.0 if ((x["DOSAGE_STANDARD"] in x["MASTER_DOSAGE"]) ) \
 											else x["EFFTIVENESS_DOSAGE"], axis=1)
 
 	return df["EFFTIVENESS"]
@@ -778,3 +777,26 @@ def mnf_encoding_cosine(df_cleanning):
 	# 	.select("MANUFACTURER_NAME", "MANUFACTURER_NAME_CLEANNING_WORDS", "MANUFACTURER_NAME_STANDARD", \
 	# 			"MANUFACTURER_NAME_STANDARD_WORDS", "EFFTIVENESS_MANUFACTURER", "COSINE_SIMILARITY").show(100)
 	return df_cleanning
+	
+	
+def second_round_with_col_recalculate(df_second_round, dosage_mapping, df_encode):
+	df_second_round = df_second_round.join(dosage_mapping, df_second_round.DOSAGE == dosage_mapping.CPA_DOSAGE, how="left").na.fill("")
+	df_second_round = df_second_round.withColumn("MASTER_DOSAGE", when(df_second_round.MASTER_DOSAGE.isNull(), df_second_round.JACCARD_DISTANCE). \
+						otherwise(df_second_round.MASTER_DOSAGE))
+	df_second_round = df_second_round.withColumn("EFFTIVENESS_DOSAGE_SE", dosage_replace(df_second_round.MASTER_DOSAGE, \
+														df_second_round.DOSAGE_STANDARD, df_second_round.EFFTIVENESS_DOSAGE)) 
+	df_second_round = df_second_round.withColumn("EFFTIVENESS_PACK_QTY_SE", pack_replace(df_second_round.EFFTIVENESS_PACK_QTY, df_second_round.SPEC_ORIGINAL, \
+														df_second_round.PACK_QTY, df_second_round.PACK_QTY_STANDARD))
+	df_second_round = mnf_encoding_index(df_second_round, df_encode)
+	df_second_round = mnf_encoding_cosine(df_second_round)
+	df_second_round = df_second_round.withColumn("EFFTIVENESS_MANUFACTURER_SE", \
+										when(df_second_round.COSINE_SIMILARITY >= df_second_round.EFFTIVENESS_MANUFACTURER, df_second_round.COSINE_SIMILARITY) \
+										.otherwise(df_second_round.EFFTIVENESS_MANUFACTURER))
+	df_second_round = mole_dosage_calculaltion(df_second_round)   # 加一列EFF_MOLE_DOSAGE，doubletype
+	
+	df_second_round = df_second_round.withColumn("EFFTIVENESS_PRODUCT_NAME_SE", \
+								prod_name_replace(df_second_round.EFFTIVENESS_MOLE_NAME, df_second_round.EFFTIVENESS_MANUFACTURER_SE, \
+												df_second_round.EFFTIVENESS_PRODUCT_NAME, df_second_round.MOLE_NAME, \
+												df_second_round.PRODUCT_NAME_STANDARD, df_second_round.EFF_MOLE_DOSAGE))
+												
+	return df_second_round

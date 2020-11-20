@@ -54,7 +54,7 @@ def execute():
 # 	df = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/raw_data")
 # 	df = spec_standify(df)  
 # 	df.show()
-	cpa_test = [("1", "1", u"西班牙礼来制药公司 （SP)", "", "0.0125 MIU 2 ML", u"美国礼来公司", 1, "辉瑞", ), 
+	cpa_test = [("1", "1", u"中美上海施贵宝制药有限公司", "", "0.0125 MIU 2 ML", u"美国百时美施贵宝公司", 1, "辉瑞", ), 
 	("2", "2", u"江苏苏州礼来制药公司",["利多","卡因"], "2% 20ML", u"美国礼来公司", 1, "辉瑞", )]
 	cpa_schema = StructType([StructField('COMPANY',StringType(),True),
 		StructField('SOURCE',StringType(),True),
@@ -70,6 +70,15 @@ def execute():
 	cpa_test_df = mnf_encoding_index(cpa_test_df, df_encode)
 	cpa_test_df = mnf_encoding_cosine(cpa_test_df)
 	cpa_test_df.show()
+	
+	# df = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/dosage_test").select("MASTER_DOSAGE", "DOSAGE_STANDARD", "EFFTIVENESS_DOSAGE", "JACCARD_DISTANCE")
+	# df.show()
+	# df.printSchema()
+	
+	# df = df.withColumn("MASTER_DOSAGE", when(df.MASTER_DOSAGE.isNull(), df.JACCARD_DISTANCE). \
+	# 					otherwise(df.MASTER_DOSAGE))
+	# df = df.withColumn("eff", dosage_replace(df.MASTER_DOSAGE, df.DOSAGE_STANDARD, df.EFFTIVENESS_DOSAGE))				
+	# df.show()
 	
 
     
