@@ -27,10 +27,10 @@ import pandas as pd
 
  
 # @尹 代码不允许出现全局变量,每一个变量必须有规定的生命周期
-split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.9/splitdata"
-training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.9/tmp/data3"
-result_path_1 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.9/tmp/data1"
-result_path_2 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.9/tmp/data3"
+# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.9/splitdata"
+# training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.9/tmp/data3"
+# result_path_1 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.9/tmp/data1"
+# result_path_2 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.9/tmp/data3"
 
 # split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.5/splitdata"
 # training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.5/tmp/data3"
@@ -45,9 +45,11 @@ result_path_2 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi
 # training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pf/0.0.1/tmp/data3"
 # result_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pf/0.0.1/tmp/data3"
 
-# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.1/splitdata"
+split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.2/splitdata"
 # training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.1/tmp/data3"
-# result_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.1/tmp/data3"
+result_path_1 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.2/tmp/data1"
+result_path_2 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.2/tmp/data2"
+
 
 def prepare():
 	os.environ["PYSPARK_PYTHON"] = "python3"
