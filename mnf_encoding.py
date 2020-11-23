@@ -158,5 +158,5 @@ if __name__ == '__main__':
 										when(df_words_cn_dic_encoder.HIGH_WORD_ENCODE > 0, df_words_cn_dic_encoder.HIGH_WORD_ENCODE).otherwise( \
 											df_words_cn_dic_encoder.OTHER_WORD_ENCODE)))).na.fill(-1.0).select("WORD", "WORD_ENCODE")
 	df_words_cn_dic_encoder = df_words_cn_dic_encoder.withColumnRenamed("WORD_ENCODE", "ENCODE")
-	df_words_cn_dic_encoder.repartition(1).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/word_dict/0.0.3")
+	df_words_cn_dic_encoder.repartition(1).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/word_dict/0.0.4")
 	df_words_cn_dic_encoder.show()
