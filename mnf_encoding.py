@@ -139,15 +139,27 @@ if __name__ == '__main__':
 								.agg(min(df_words_cn_dic_encoder.GEO_ENCODE).alias("GEO_ENCODE"), \
 									min(df_words_cn_dic_encoder.COUNTRY_ENCODE).alias("COUNTRY_ENCODE"))
 	# df_words_cn_dic_encoder.repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/district/words")
-
-	# 7.1 高分词
+	df_words_cn_dic_encoder.show(3)
+	
+	# 7.1 集团维度
+	df_group_dimension = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/group_dimension/group_encode")
+	df_words_cn_dic_encoder = df_words_cn_dic_encoder.join(df_group_dimension, df_words_cn_dic_encoder.WORD == df_group_dimension.Group, how="left").na.fill(-1.0)
+	df_words_cn_dic_encoder.show(2)
+	df_words_cn_dic_encoder = df_words_cn_dic_encoder.withColumn("GROUP_ENCODE", 2001 + df_words_cn_dic_encoder.ID.cast(IntegerType())).na.fill(-1.0)
+	df_words_cn_dic_encoder.show(2)
+	df_words_cn_dic_encoder = df_words_cn_dic_encoder.select("WORD", "GEO_ENCODE", "COUNTRY_ENCODE", "GROUP_ENCODE")
+	df_words_cn_dic_encoder.show(2)
+	
+	# 7.2 高分词
 	df_high_scroe_word = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/high_word_seg")
 	# df_high_scroe_word.show(truncate=False)
 
-	df_words_cn_dic_encoder = df_words_cn_dic_encoder.join(df_high_scroe_word, df_words_cn_dic_encoder.WORD == df_high_scroe_word.HIGH_WORD, how="left").na.fill("-1.0")
-	df_words_cn_dic_encoder = df_words_cn_dic_encoder.withColumn("HIGH_WORD_ENCODE", 2001 + df_words_cn_dic_encoder.ID.cast(IntegerType())).na.fill(-1.0)
+	df_words_cn_dic_encoder = df_words_cn_dic_encoder.join(df_high_scroe_word, df_words_cn_dic_encoder.WORD == df_high_scroe_word.HIGH_WORD, how="left").na.fill(-1.0)
+	df_words_cn_dic_encoder.show(2)
+	df_words_cn_dic_encoder = df_words_cn_dic_encoder.withColumn("HIGH_WORD_ENCODE", 2201 + df_words_cn_dic_encoder.ID.cast(IntegerType())).na.fill(-1.0)
+	df_words_cn_dic_encoder.show(2)
 	df_words_cn_dic_encoder = df_words_cn_dic_encoder.select("WORD", "GEO_ENCODE", "COUNTRY_ENCODE", "HIGH_WORD_ENCODE")
-
+	df_words_cn_dic_encoder.show(2)
 	# 8. 其它分词
 	df_words_cn_dic_encoder = df_words_cn_dic_encoder.repartition(1).withColumn("OTHER_WORD_ENCODE", 5001 + monotonically_increasing_id()).na.fill(-1.0)
 
@@ -158,5 +170,5 @@ if __name__ == '__main__':
 										when(df_words_cn_dic_encoder.HIGH_WORD_ENCODE > 0, df_words_cn_dic_encoder.HIGH_WORD_ENCODE).otherwise( \
 											df_words_cn_dic_encoder.OTHER_WORD_ENCODE)))).na.fill(-1.0).select("WORD", "WORD_ENCODE")
 	df_words_cn_dic_encoder = df_words_cn_dic_encoder.withColumnRenamed("WORD_ENCODE", "ENCODE")
-	df_words_cn_dic_encoder.repartition(1).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/word_dict/0.0.4")
+	# df_words_cn_dic_encoder.repartition(1).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/word_dict/0.0.5")
 	df_words_cn_dic_encoder.show()

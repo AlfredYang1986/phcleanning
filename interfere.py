@@ -24,7 +24,6 @@ def interfere_replace_udf(origin, interfere):
 def human_interfere(spark, df_cleanning, df_interfere):
      # 1. 人工干预优先，不太对后期改
      # 干预流程将数据直接替换，在走平常流程，不直接过滤，保证流程的统一性
-     df_cleanning.printSchema()
      df_cleanning = df_cleanning.withColumn("min", concat(df_cleanning["MOLE_NAME"], df_cleanning["PRODUCT_NAME"], df_cleanning["SPEC"], \
      									df_cleanning["DOSAGE"], df_cleanning["PACK_QTY"], df_cleanning["MANUFACTURER_NAME"]))
      
