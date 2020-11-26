@@ -44,7 +44,8 @@ def human_interfere(spark, df_cleanning, df_interfere):
      				.withColumn("PACK_QTY", interfere_replace_udf(df_cleanning.PACK_QTY, df_cleanning.PACK_QTY_INTERFERE)) \
      				.withColumn("MANUFACTURER_NAME", interfere_replace_udf(df_cleanning.MANUFACTURER_NAME, df_cleanning.MANUFACTURER_NAME_INTERFERE))
      				
-     df_cleanning = df_cleanning.select("id", "PACK_ID_CHECK", "MOLE_NAME", "PRODUCT_NAME", "DOSAGE", "SPEC", "PACK_QTY", "MANUFACTURER_NAME")
+     df_cleanning = df_cleanning.select("id", "PACK_ID_CHECK", "MOLE_NAME", "PRODUCT_NAME", "DOSAGE", "SPEC", "PACK_QTY", "MANUFACTURER_NAME", \
+                                        "MOLE_NAME_ORIGINAL", "PRODUCT_NAME_ORIGINAL", "DOSAGE_ORIGINAL", "SPEC_ORIGINAL", "PACK_QTY_ORIGINAL", "MANUFACTURER_NAME_ORIGINAL")
      # df_cleanning.persist()
      
      return df_cleanning

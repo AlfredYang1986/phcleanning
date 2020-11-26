@@ -51,21 +51,20 @@ if __name__ == '__main__':
 	spark = prepare()
 
 	# 1. load the data
-	df_result = load_training_data(spark)  # 待清洗数据
-	# df_result.printSchema()
+	df_result = load_training_data(spark)  # 进入清洗流程的所有数据
 	df_validate = df_result #.select("id", "label", "features").orderBy("id")
 	df_encode = load_word_dict_encode(spark) 
+	df_all = load_split_data(spark)  # 带id的所有数据
+	resultid = df_result.select("id").distinct()
+	resultid_lst = resultid.toPandas()["id"].tolist()
+	df_lost = df_all.where(~df_all.id.isin(resultid_lst))  # 第一步就丢失了的数据
 
 	# 2. load model
 	# model = PipelineModel.load("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/dt")
-	model = PipelineModel.load("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.1/model")
+	model = PipelineModel.load("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.2/model")
 
 	# 3. compute accuracy on the test set
 	predictions = model.transform(df_validate)
-	
-	# predictions.where((predictions.label == 1.0) & (predictions.prediction == 0.0)).show(truncate=False)
-	# predictions.where((predictions.label == 1.0) & (predictions.prediction == 0.0)).select("id", "label", "probability", "prediction").show(truncate=False)
-	# predictions.where((predictions.label == 1.0) & (predictions.prediction == 1.0)).select("id", "label", "probability", "prediction").show(truncate=False)
 	evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
 	accuracy = evaluator.evaluate(predictions)
 	print("Test Error = %g " % (1.0 - accuracy))
@@ -73,22 +72,26 @@ if __name__ == '__main__':
 
 	# 4. Test with Pharbers defined methods
 	result = predictions
-	# result.printSchema()
+	result_similarity = similarity(result)
+	# result_similarity.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/eia/0.0.2/for_analysis")
+	# print("用于分析的的条目写入完成")
 	result = result.withColumn("JACCARD_DISTANCE_MOLE_NAME", result.JACCARD_DISTANCE[0]) \
 				.withColumn("JACCARD_DISTANCE_DOSAGE", result.JACCARD_DISTANCE[1]) \
 				.drop("JACCARD_DISTANCE", "indexedFeatures").drop("rawPrediction", "probability")
-	# result.orderBy("id").repartition(1).write.mode("overwrite").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/result")
-	df_ph = result.where((result.prediction == 1.0) | (result.label == 1.0))
 	ph_total = result.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
-	print("数据总数： " + str(ph_total))
-	result = result.where(result.PACK_ID_CHECK != "")
-	ph_total = result.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
-	print("人工已匹配数据总数: " + str(ph_total))
+	print("数据总数： " + str(df_all.count()))
+	print("进入匹配流程条目： " + str(ph_total))
+	print("丢失条目： " + str(df_lost.count()))
+	# result = result.where(result.PACK_ID_CHECK != "")
+	# ph_total = result.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
+	# print("人工已匹配数据总数: " + str(ph_total))
 
 	# 5. 尝试解决多高的问题
 	df_true_positive = similarity(result.where(result.prediction == 1.0))
 	df_true_positive = df_true_positive.where(df_true_positive.RANK == 1)
 	machine_right_1 = df_true_positive
+	df_true_positive.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/eia/0.0.2/machine_tp")
+	print("机器判断TP的条目写入完成")
 
 	ph_positive_prodict = df_true_positive.count()
 	print("机器判断第一轮TP条目 = " + str(ph_positive_prodict))
@@ -123,104 +126,14 @@ if __name__ == '__main__':
 	# 6. 第二轮筛选TP
 	df_true_positive = df_true_positive.select("id").distinct()
 	id_local = df_true_positive.toPandas()["id"].tolist()  # list的内容是上一步确定TP的id
-
+	
 	df_candidate = result.where(~result.id.isin(id_local)) # df_candidate 是上一步选出的TP的剩下的数据，进行第二轮
+	df_candidate = similarity(df_candidate)
+	df_candidate = df_candidate.where(df_candidate.RANK<=3)
+	# df_candidate.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/eia/0.0.2/second_round")
+	# print("第二轮写入完成")
 	count_prediction_se = df_candidate.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
 	print("第二轮总量= " + str(count_prediction_se))
-	df_candidate.printSchema()
-	# 第二轮筛选的方法是：再对dosage等列重新计算eff，要用到dosage_mapping
-	df_second_round = df_candidate.drop("prediction", "indexedLabel", "indexedFeatures", "rawPrediction", "probability", "MASTER_DOSAGE", \
-								"MANUFACTURER_NAME_STANDARD_WORDS", "MANUFACTURER_NAME_CLEANNING_WORDS", "COSINE_SIMILARITY", "EFF_MOLE_DOSAGE", "CPA_DOSAGE", "MASTER_DOSAGE")
-	df_second_round = df_second_round.withColumnRenamed("features", "features_first")
-	df_second_round.printSchema()
-	dosage_mapping = load_dosage_mapping(spark)
-	
-	df_second_round = df_second_round.join(dosage_mapping, df_second_round.DOSAGE == dosage_mapping.CPA_DOSAGE, how="left").na.fill("")
-	df_second_round = df_second_round.withColumn("EFFTIVENESS_DOSAGE_SE", dosage_replace(df_second_round.MASTER_DOSAGE, \
-														df_second_round.DOSAGE_STANDARD, df_second_round.EFFTIVENESS_DOSAGE)) 
-	df_second_round = df_second_round.withColumn("EFFTIVENESS_PACK_QTY_SE", pack_replace(df_second_round.EFFTIVENESS_PACK_QTY, df_second_round.SPEC_ORIGINAL, \
-														df_second_round.PACK_QTY, df_second_round.PACK_QTY_STANDARD))
-	df_second_round = mnf_encoding_index(df_second_round, df_encode)
-	df_second_round = mnf_encoding_cosine(df_second_round)
-	df_second_round = df_second_round.withColumn("EFFTIVENESS_MANUFACTURER_SE", \
-										when(df_second_round.COSINE_SIMILARITY >= df_second_round.EFFTIVENESS_MANUFACTURER, df_second_round.COSINE_SIMILARITY) \
-										.otherwise(df_second_round.EFFTIVENESS_MANUFACTURER))
-	df_second_round = mole_dosage_calculaltion(df_second_round)   # 加一列EFF_MOLE_DOSAGE，doubletype
-	
-	df_second_round = df_second_round.withColumn("EFFTIVENESS_PRODUCT_NAME_SE", \
-								prod_name_replace(df_second_round.EFFTIVENESS_MOLE_NAME, df_second_round.EFFTIVENESS_MANUFACTURER_SE, \
-												df_second_round.EFFTIVENESS_PRODUCT_NAME, df_second_round.MOLE_NAME, \
-												df_second_round.PRODUCT_NAME_STANDARD, df_second_round.EFF_MOLE_DOSAGE))
-	
-	
-	assembler = VectorAssembler( \
-				inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_PRODUCT_NAME_SE", "EFFTIVENESS_DOSAGE_SE", "EFFTIVENESS_SPEC", \
-							"EFFTIVENESS_PACK_QTY_SE", "EFFTIVENESS_MANUFACTURER_SE"], \
-				outputCol="features")
-	df_second_round = assembler.transform(df_second_round)
-	# df_second_round.repartition(10).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/second_round_dt")
-	
-	predictions_second_round = model.transform(df_second_round)
-	predictions_second_round = predictions_second_round.withColumnRenamed("EFFTIVENESS_PRODUCT_NAME", "EFF_PRODUCT_NAME_FIRST").drop("EFFTIVENESS_DOSAGE", "EFFTIVENESS_PACK_QTY", "EFFTIVENESS_MANUFACTURER")
-	predictions_second_round = predictions_second_round.withColumnRenamed("EFFTIVENESS_PRODUCT_NAME_SE", "EFFTIVENESS_PRODUCT_NAME") \
-																.withColumnRenamed("EFFTIVENESS_DOSAGE_SE", "EFFTIVENESS_DOSAGE") \
-																.withColumnRenamed("EFFTIVENESS_MANUFACTURER_SE", "EFFTIVENESS_MANUFACTURER") \
-																.withColumnRenamed("EFFTIVENESS_PACK_QTY_SE", "EFFTIVENESS_PACK_QTY")
-	predictions_second_round = similarity(predictions_second_round)
-	predictions_second_round.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/second_round_1120")
-	
-	evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
-	accuracy = evaluator.evaluate(predictions_second_round)
-	print("Test Error = %g " % (1.0 - accuracy))
-	print("Test set accuracy = " + str(accuracy))
-	
-	# xixi1=predictions_second_round.toPandas()
-	# xixi1.to_excel('predictions_second_round_mnf.xlsx', index = False)
-	
-	# 第二轮正确率检测
-	df_true_positive_se = predictions_second_round.where((predictions_second_round.prediction == 1.0) & (predictions_second_round.RANK == 1))
-	machine_right_2 = df_true_positive_se
-	ph_positive_prodict_se = df_true_positive_se.count()
-	print("机器判断第二轮TP条目 = " + str(ph_positive_prodict_se))
-	ph_positive_hit_se = df_true_positive_se.where((df_true_positive_se.prediction == df_true_positive_se.label) & (df_true_positive_se.label == 1.0)).count()
-	print("其中正确条目 = " + str(ph_positive_hit_se))
-	ph_tp_null_packid_se = df_true_positive_se.where(df_true_positive_se.PACK_ID_CHECK == "")
-	# ph_negetive_hit = result.where(result.prediction != result.label).count()
-	if ph_positive_prodict_se == 0:
-		print("Pharbers Test set accuracy （机器判断第二轮TP比例） = 无" )
-	else:
-		print("Pharbers Test set accuracy （机器判断第二轮TP比例） = " + str(ph_positive_prodict_se / ph_total))
-		print("Pharbers Test set precision （机器判断第二轮TP正确率） = " + str(ph_positive_hit_se / ph_positive_prodict_se))
-		print("人工没有匹配packid = " + str(ph_tp_null_packid_se.count()))
-	
-	# for analyses
-	# df_pre1_label0 = df_true_positive_se.where((df_true_positive_se.prediction == 1.0) & (df_true_positive_se.label == 0.0))
-	# xixi1=df_pre1_label0.toPandas()
-	# xixi1.to_excel('round2_pre1_label0.xlsx', index = False)
-	
-	# 两轮合并整理成表格
-	# machine_right_1 = machine_right_1.drop("indexedLabel", "JACCARD_DISTANCE_DOSAGE", "JACCARD_DISTANCE_MOLE_NAME", "SIMILARITY", "RANK")
-	# machine_right_2 = machine_right_2.drop("indexedLabel", "JACCARD_DISTANCE_DOSAGE", "JACCARD_DISTANCE_MOLE_NAME", "SIMILARITY", "RANK", "features", \
-	# 								"EFFTIVENESS_PRODUCT_NAME_SE", "EFFTIVENESS_DOSAGE_SE", "EFFTIVENESS_PACK_QTY_SE", "indexedFeatures", "rawPrediction", "probability")
-	# machine_right_1.printSchema()
-	# machine_right_2.printSchema()
-	# machine_right = machine_right_1.unionByName(machine_right_2)
-	# xixi1=machine_right.toPandas()
-	# xixi1.to_excel('pf_true_positive.xlsx', index = False)
-
-	# 7. 两轮估算总量
-	ph_positive_prodict = ph_positive_prodict + ph_positive_prodict_se
-	print("两轮判断TP总量 = " + str(ph_positive_prodict))
-	ph_positive_hit = ph_positive_hit + ph_positive_hit_se
-	print("两轮判断TP总正确数量 = " + str(ph_positive_hit))
-	# ph_negetive_hit = result.where(result.prediction != result.label).count()
-	if ph_positive_prodict_se == 0:
-		print("Pharbers Test set accuracy （两轮判断TP总比例） = " + str(ph_positive_prodict / ph_total))
-		print("Pharbers Test set precision （两轮判断TP总正确率）= 0")
-	else:
-		print("Pharbers Test set accuracy （两轮判断TP总比例） = " + str(ph_positive_prodict / ph_total))
-		print("Pharbers Test set precision （两轮判断TP总正确率）= " + str(ph_positive_hit / ph_positive_prodict))
-		print("人工未匹配总量" + str(ph_tp_null_packid_se.count()+ph_tp_null_packid.count()))
 	
 
 	# 8. 第三轮

@@ -14,7 +14,7 @@ from pyspark.sql.types import *
 from pyspark.sql.functions import desc
 from pyspark.sql.functions import rank
 from pyspark.sql.functions import when
-from pyspark.sql.functions import array
+from pyspark.sql.functions import array, split
 from pyspark.sql.functions import broadcast
 from pyspark.sql import Window
 from pyspark.ml.linalg import Vectors, VectorUDT
@@ -25,29 +25,41 @@ import re
 import pandas as pd
 
 
-
+ 
 # @尹 代码不允许出现全局变量,每一个变量必须有规定的生命周期
-split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.9/splitdata"
-training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.9/tmp/data3"
-result_path_1 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.9/tmp/data1"
-result_path_2 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.9/tmp/data3"
+# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/chc/0.0.2/splitdata"
+# result_path_1 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/chc/0.0.2/tmp/data1"
+# result_path_2 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/chc/0.0.2/tmp/data2"
 
-# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.5/splitdata"
-# training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.5/tmp/data3"
-# result_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.5/tmp/data3"
+
+# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.10/splitdata"
+# training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.10/tmp/data3"
+# result_path_1 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.10/tmp/data1"
+# result_path_2 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.10/tmp/data2"
+
+# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.7/splitdata"
+# result_path_1 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.7/tmp/data1"
+# result_path_2 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.7/tmp/data2"
+
+# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/eia/0.0.2/splitdata"
+# result_path_1 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/eia/0.0.2/tmp/data1"
+# result_path_2 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/eia/0.0.2/tmp/data2"
 
 
 # split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/az/0.0.1/splitdata"
 # training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/az/0.0.1/tmp/data3"
 # result_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/az/0.0.1/tmp/data3"
 
-# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pf/0.0.1/splitdata"
-# training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pf/0.0.1/tmp/data3"
-# result_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pf/0.0.1/tmp/data3"
+# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pf/0.0.3/splitdata"
+# training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pf/0.0.3/tmp/data3"
+# result_path_1 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pf/0.0.3/tmp/data1"
+# result_path_2 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pf/0.0.3/tmp/data2"
 
-# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.1/splitdata"
+# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.2/splitdata"
 # training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.1/tmp/data3"
-# result_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.1/tmp/data3"
+# result_path_1 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.2/tmp/data1"
+# result_path_2 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.2/tmp/data2"
+
 
 def prepare():
 	os.environ["PYSPARK_PYTHON"] = "python3"
@@ -89,8 +101,17 @@ if __name__ == '__main__':
 	modify_pool_cleanning_prod(spark)  # 更高的并发数
 	df_cleanning = spark.read.parquet(split_data_path)
 	df_cleanning = df_cleanning.repartition(1600)
+	df_cleanning = df_cleanning.withColumn("MOLE_NAME_ORIGINAL", df_cleanning.MOLE_NAME) \
+								.withColumn("PRODUCT_NAME_ORIGINAL", df_cleanning.PRODUCT_NAME) \
+								.withColumn("DOSAGE_ORIGINAL", df_cleanning.DOSAGE) \
+								.withColumn("SPEC_ORIGINAL", df_cleanning.SPEC) \
+								.withColumn("PACK_QTY_ORIGINAL", df_cleanning.PACK_QTY) \
+								.withColumn("MANUFACTURER_NAME_ORIGINAL", df_cleanning.MANUFACTURER_NAME)
+								# 保留原字段内容
+	df_cleanning.show(2)
+	df_cleanning = df_cleanning.withColumn("PRODUCT_NAME", split(df_cleanning.PRODUCT_NAME_ORIGINAL, "-")[0])
+	df_cleanning.show(2)
 	df_cleanning = human_interfere(spark, df_cleanning, df_interfere)
-	df_cleanning = df_cleanning.withColumn("SPEC_ORIGINAL", df_cleanning.SPEC) # 保留原字段内容
 	# df_cleanning = dosage_standify(df_cleanning)  # 剂型列规范
 	df_cleanning = spec_standify(df_cleanning)  # 规格列规范
 	
@@ -98,7 +119,6 @@ if __name__ == '__main__':
 	df_standard = df_standard.withColumn("SPEC", df_standard.SPEC_STANDARD)
 	df_standard = spec_standify(df_standard)
 	df_standard = df_standard.withColumn("SPEC_STANDARD", df_standard.SPEC).drop("SPEC")
-	
 	# 2. cross join
 	df_result = df_cleanning.crossJoin(broadcast(df_standard)).na.fill("")
 
@@ -143,7 +163,6 @@ if __name__ == '__main__':
 	# 6. 第二轮更改优化eff的计算方法
 	df_second_round = spark.read.parquet(result_path_1)
 	# df_second_round = df_result
-	df_second_round = df_second_round
 	df_second_round = second_round_with_col_recalculate(df_second_round, df_dosage_mapping, df_encode)
 	df_second_round = df_second_round.withColumnRenamed("EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_PRODUCT_NAME_FIRST") \
 								.withColumnRenamed("EFFTIVENESS_DOSAGE", "EFFTIVENESS_DOSAGE_FIRST") \
