@@ -142,16 +142,16 @@ def efftiveness_with_edit_distance(mo, ms, po, ps, do, ds, so, ss, qo, qs, mf, m
 	这个是属于数据Cutting过程，所以这两个变量不是精确变量，不放在后期学习的过程中
 """
 @pandas_udf(ArrayType(DoubleType()), PandasUDFType.SCALAR)
-def efftiveness_with_jaccard_distance(mo, ms, do, ds):
+def efftiveness_with_jaccard_distance(mo, ms, po, ps):
 	frame = {
 		"MOLE_NAME": mo, "MOLE_NAME_STANDARD": ms,
-		"DOSAGE": do, "DOSAGE_STANDARD": ds
+		"PACK_QTY": po, "PACK_QTY_STANDARD": ps
 	}
 	df = pd.DataFrame(frame)
 
 	df["MOLE_JD"] = df.apply(lambda x: jd(set(x["MOLE_NAME"]), set(x["MOLE_NAME_STANDARD"])), axis=1)
-	df["DOSAGE_JD"] = df.apply(lambda x: jd(set(x["DOSAGE"]), set(x["DOSAGE_STANDARD"])), axis=1)
-	df["RESULT"] = df.apply(lambda x: [x["MOLE_JD"], x["DOSAGE_JD"]], axis=1)
+	df["PACK_JD"] = df.apply(lambda x: jd(set(x["PACK_QTY"].replace(".0", "")), set(x["PACK_QTY_STANDARD"].replace(".0", ""))), axis=1)
+	df["RESULT"] = df.apply(lambda x: [x["MOLE_JD"], x["PACK_JD"]], axis=1)
 	return df["RESULT"]
 
 
@@ -259,11 +259,11 @@ def efftiveness_with_jaro_winkler_similarity(mo, ms, po, ps, do, ds, so, ss, qo,
 	df["DOSAGE_JWS"] = df.apply(lambda x: 1 if x["DOSAGE"] in x ["DOSAGE_STANDARD"] \
 										else 1 if x["DOSAGE_STANDARD"] in x ["DOSAGE"] \
 										else jaro_winkler_similarity(x["DOSAGE"], x["DOSAGE_STANDARD"]), axis=1)
-	df["SPEC_JWS"] = df.apply(lambda x: 1 if x["SPEC"].strip() ==  x["SPEC_STANDARD"].strip() \
-										else 0 if ((x["SPEC"].strip() == "") or (x["SPEC_STANDARD"].strip() == "")) \
-										else 1 if x["SPEC"].strip() in x["SPEC_STANDARD"].strip() \
-										else 1 if x["SPEC_STANDARD"].strip() in x["SPEC"].strip() \
-										else jaro_winkler_similarity(x["SPEC"].strip(), x["SPEC_STANDARD"].strip()), axis=1)
+	df["SPEC_JWS"] = df.apply(lambda x: 1 if x["SPEC"].strip().replace("//", "/") ==  x["SPEC_STANDARD"].strip().replace("//", "/") \
+										else 0 if ((x["SPEC"].strip().replace("///", "") == "") or (x["SPEC_STANDARD"].strip().replace("///", "") == "")) \
+										else 1 if x["SPEC"].strip().replace("//", "/") in x["SPEC_STANDARD"].strip().replace("//", "/") \
+										else 1 if x["SPEC_STANDARD"].strip().replace("//", "/") in x["SPEC"].strip().replace("//", "/") \
+										else jaro_winkler_similarity(x["SPEC"].strip().replace("//", "/"), x["SPEC_STANDARD"].strip().replace("//", "/")), axis=1)
 	df["PACK_QTY_JWS"] = df.apply(lambda x: 1 if (x["PACK_QTY"].replace(".0", "") == x["PACK_QTY_STANDARD"].replace(".0", "")) \
 										| (("喷" in x["PACK_QTY"]) & (x["PACK_QTY"] in x["SPEC_ORIGINAL"])) \
 										else 0, axis=1)

@@ -55,9 +55,12 @@ if __name__ == '__main__':
 	df_validate = df_result #.select("id", "label", "features").orderBy("id")
 	df_encode = load_word_dict_encode(spark) 
 	df_all = load_split_data(spark)  # 带id的所有数据
+	
 	resultid = df_result.select("id").distinct()
 	resultid_lst = resultid.toPandas()["id"].tolist()
 	df_lost = df_all.where(~df_all.id.isin(resultid_lst))  # 第一步就丢失了的数据
+	# df_lost.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/chc/0.0.4/lost")
+	# print("丢失条目写入完成")
 
 	# 2. load model
 	# model = PipelineModel.load("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/dt")
@@ -73,13 +76,24 @@ if __name__ == '__main__':
 	# 4. Test with Pharbers defined methods
 	result = predictions
 	result_similarity = similarity(result)
-	# result_similarity.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/eia/0.0.2/for_analysis")
+	# result_similarity.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/chc/0.0.4/for_analysis")
 	# print("用于分析的的条目写入完成")
 	result = result.withColumn("JACCARD_DISTANCE_MOLE_NAME", result.JACCARD_DISTANCE[0]) \
 				.withColumn("JACCARD_DISTANCE_DOSAGE", result.JACCARD_DISTANCE[1]) \
 				.drop("JACCARD_DISTANCE", "indexedFeatures").drop("rawPrediction", "probability")
+	result = result.where(result.PACK_ID_CHECK != "nan")  
 	ph_total = result.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
-	print("数据总数： " + str(df_all.count()))
+	df_label = result.groupBy("id").agg({"label":"max", "prediction":"max"})
+	
+	df_label.withColumnRenamed("first(label)", "")
+	machine_cannot = df_label.where(df_label["max(prediction)"] == 0).count()
+	print(machine_cannot)
+	machine_cannot_true = df_label.where((df_label["max(label)"] == 0) & (df_label["max(prediction)"] == 0)).count()
+	print(machine_cannot_true)
+	
+	
+	all_count = df_all.count()
+	print("数据总数： " + str(all_count))
 	print("进入匹配流程条目： " + str(ph_total))
 	print("丢失条目： " + str(df_lost.count()))
 	# result = result.where(result.PACK_ID_CHECK != "")
@@ -90,8 +104,8 @@ if __name__ == '__main__':
 	df_true_positive = similarity(result.where(result.prediction == 1.0))
 	df_true_positive = df_true_positive.where(df_true_positive.RANK == 1)
 	machine_right_1 = df_true_positive
-	df_true_positive.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/eia/0.0.2/machine_tp")
-	print("机器判断TP的条目写入完成")
+	# df_true_positive.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/eia/0.0.2/machine_tp")
+	# print("机器判断TP的条目写入完成")
 
 	ph_positive_prodict = df_true_positive.count()
 	print("机器判断第一轮TP条目 = " + str(ph_positive_prodict))
@@ -102,49 +116,55 @@ if __name__ == '__main__':
 	if ph_positive_prodict == 0:
 		print("Pharbers Test set accuracy （机器判断第一轮T比例） = 无 ")
 	else:
-		print("Pharbers Test set accuracy （机器判断第一轮TP比例） = " + str(ph_positive_prodict / ph_total))
+		print("Pharbers Test set accuracy （机器判断第一轮TP比例） = " + str(ph_positive_prodict / ph_total) + " / " + str(ph_positive_prodict / all_count))
 		print("Pharbers Test set precision （机器判断第一轮TP正确率） = " + str(ph_positive_hit / ph_positive_prodict))
 		print("人工没有匹配packid = " + str(ph_tp_null_packid.count()))
 
-	
-	# for analysis
-	# df_true_positive.orderBy("id").repartition(1) \
-	# 	.where((result.prediction == 0.0) & (result.label == 1.0)) \
-	# 	.write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/dt_predictions/false_negative")
-	# df_true_positive.orderBy("id").repartition(1) \
-	# 	.where((result.prediction == 1.0) & (result.label == 0.0)) \
-	# 	.write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/dt_predictions/false_positive")
-	# for output
-	# df_true_positive.orderBy("id").repartition(1) \
-	# 	.where((result.prediction == 1.0) & (result.label == 0.0)) \
-	# 	.write.mode("overwrite").option("header", "true").csv("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/tmp/dt_predictions/prediction")\
-	# 
-	# df_pre1_label0 = df_true_positive.where((df_true_positive.prediction == 1.0) & (df_true_positive.label == 0.0))
-	# xixi1=df_pre1_label0.toPandas()
-	# xixi1.to_excel('round1_pre1_label0.xlsx', index = False)
 
 	# 6. 第二轮筛选TP
 	df_true_positive = df_true_positive.select("id").distinct()
 	id_local = df_true_positive.toPandas()["id"].tolist()  # list的内容是上一步确定TP的id
 	
 	df_candidate = result.where(~result.id.isin(id_local)) # df_candidate 是上一步选出的TP的剩下的数据，进行第二轮
-	df_candidate = similarity(df_candidate)
-	df_candidate = df_candidate.where(df_candidate.RANK<=3)
-	# df_candidate.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/eia/0.0.2/second_round")
-	# print("第二轮写入完成")
-	count_prediction_se = df_candidate.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
+	df_candidate = df_candidate.drop("prediction", "indexedLabel", "indexedFeatures", "rawPrediction", "probability", "features")
+	# df_candidate = df_candidate.where(df_candidate.RANK<=3)
+	df_candidate.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/chc/0.0.4/second_round")
+	print("第二轮写入完成")
+	count_prediction_se = df_candidate.groupBy("id").agg({"label": "first"}).count()
 	print("第二轮总量= " + str(count_prediction_se))
+	df_candidate.printSchema()
+	model = PipelineModel.load("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.3/model_without_prod")
+	assembler = VectorAssembler( \
+					inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_SPEC",\
+								"EFFTIVENESS_PACK_QTY", "EFFTIVENESS_MANUFACTURER"], \
+					outputCol="features")
+	df_candidate = assembler.transform(df_candidate)
+	df_candidate.printSchema()
+	predictions = model.transform(df_candidate)
+	evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
+	accuracy = evaluator.evaluate(predictions)
+	print("Test Error = %g " % (1.0 - accuracy))
+	print("Test set accuracy = " + str(accuracy))
+	
+	df_true_positive_se = similarity(predictions.where((predictions.prediction == 1.0)))
+	df_true_positive_se = df_true_positive_se.where(df_true_positive_se.RANK == 1)
+
+	ph_positive_prodict = df_true_positive_se.count()
+	print("机器判断第二轮TP条目 = " + str(ph_positive_prodict))
+	ph_positive_hit = df_true_positive_se.where((df_true_positive_se.prediction == 1.0) & (df_true_positive_se.label == 1.0)).count()
+	print("其中正确条目 = " + str(ph_positive_hit))
+	# ph_tp_null_packid = df_true_positive.where(df_true_positive.PACK_ID_CHECK == "")
 	
 
 	# 8. 第三轮
 	df_prediction_se = df_true_positive_se.select("id").distinct()
 	id_local_se = df_prediction_se.toPandas()["id"].tolist()
 	id_local_total = id_local_se + id_local
-	predictions_second_round = predictions_second_round.drop("EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_PACK_QTY", "EFFTIVENESS_MANUFACTURER")
-	df_candidate_third = predictions_second_round.where(~result.id.isin(id_local_total)).withColumnRenamed("EFFTIVENESS_PRODUCT_NAME_SE", "EFFTIVENESS_PRODUCT_NAME") \
-																.withColumnRenamed("EFFTIVENESS_DOSAGE_SE", "EFFTIVENESS_DOSAGE") \
-																.withColumnRenamed("EFFTIVENESS_MANUFACTURER_SE", "EFFTIVENESS_MANUFACTURER") \
-																.withColumnRenamed("EFFTIVENESS_PACK_QTY_SE", "EFFTIVENESS_PACK_QTY")
+	# predictions_second_round = predictions_second_round.drop("EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_PACK_QTY", "EFFTIVENESS_MANUFACTURER")
+	# df_candidate_third = predictions_second_round.where(~result.id.isin(id_local_total)).withColumnRenamed("EFFTIVENESS_PRODUCT_NAME_SE", "EFFTIVENESS_PRODUCT_NAME") \
+	# 															.withColumnRenamed("EFFTIVENESS_DOSAGE_SE", "EFFTIVENESS_DOSAGE") \
+	# 															.withColumnRenamed("EFFTIVENESS_MANUFACTURER_SE", "EFFTIVENESS_MANUFACTURER") \
+	# 															.withColumnRenamed("EFFTIVENESS_PACK_QTY_SE", "EFFTIVENESS_PACK_QTY")
 	count_third = df_candidate_third.groupBy("id").agg({"prediction": "first", "label": "first"}).count()
 	print("第三轮总量= " + str(count_third))
 	df_candidate_third = similarity(df_candidate_third)

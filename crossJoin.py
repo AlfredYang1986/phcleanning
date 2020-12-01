@@ -27,9 +27,9 @@ import pandas as pd
 
  
 # @尹 代码不允许出现全局变量,每一个变量必须有规定的生命周期
-# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/chc/0.0.2/splitdata"
-# result_path_1 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/chc/0.0.2/tmp/data1"
-# result_path_2 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/chc/0.0.2/tmp/data2"
+split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/chc/0.0.4/splitdata"
+result_path_1 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/chc/0.0.4/tmp/data1"
+result_path_2 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/chc/0.0.4/tmp/data2"
 
 
 # split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.10/splitdata"
@@ -37,9 +37,9 @@ import pandas as pd
 # result_path_1 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.10/tmp/data1"
 # result_path_2 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.10/tmp/data2"
 
-# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.7/splitdata"
-# result_path_1 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.7/tmp/data1"
-# result_path_2 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.7/tmp/data2"
+# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.8/splitdata"
+# result_path_1 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.8/tmp/data1"
+# result_path_2 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.8/tmp/data2"
 
 # split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/eia/0.0.2/splitdata"
 # result_path_1 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/eia/0.0.2/tmp/data1"
@@ -108,9 +108,7 @@ if __name__ == '__main__':
 								.withColumn("PACK_QTY_ORIGINAL", df_cleanning.PACK_QTY) \
 								.withColumn("MANUFACTURER_NAME_ORIGINAL", df_cleanning.MANUFACTURER_NAME)
 								# 保留原字段内容
-	df_cleanning.show(2)
 	df_cleanning = df_cleanning.withColumn("PRODUCT_NAME", split(df_cleanning.PRODUCT_NAME_ORIGINAL, "-")[0])
-	df_cleanning.show(2)
 	df_cleanning = human_interfere(spark, df_cleanning, df_interfere)
 	# df_cleanning = dosage_standify(df_cleanning)  # 剂型列规范
 	df_cleanning = spec_standify(df_cleanning)  # 规格列规范
@@ -127,12 +125,12 @@ if __name__ == '__main__':
 	df_result = df_result.withColumn("JACCARD_DISTANCE", \
 				efftiveness_with_jaccard_distance( \
 					df_result.MOLE_NAME, df_result.MOLE_NAME_STANDARD, \
-					df_result.DOSAGE, df_result.DOSAGE_STANDARD \
+					df_result.PACK_QTY, df_result.PACK_QTY_STANDARD \
 					))
 
 	# 4. cutting for reduce the calculation
-	# df_result = df_result.where((df_result.JACCARD_DISTANCE[0] < 0.6) & (df_result.JACCARD_DISTANCE[1] < 0.9))
-	df_result = df_result.where((df_result.JACCARD_DISTANCE[0] < 0.6))  # 目前只取了分子名来判断
+	df_result = df_result.where((df_result.JACCARD_DISTANCE[0] < 0.6) & (df_result.JACCARD_DISTANCE[1] < 0.5))
+	df_result.show(10)
 
 
 	# 5. edit_distance is not very good for normalization probloms

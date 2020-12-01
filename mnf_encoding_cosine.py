@@ -63,14 +63,16 @@ def mnf_index_word_cosine_similarity(o, v):
 		s.sort()
 		for item in s:
 			if isnan(item):
-				idx.append(5999)
+				idx.append(7999)
 				values.append(1)
 				break
 			else:
 				idx.append(item)
 				if item < 2000:
 					values.append(2)
-				elif (item >= 2000) & (item < 3000):
+				elif (item >= 2000) & (item < 2200):
+					values.append(6)
+				elif (item >= 2200) & (item < 5000):
 					values.append(10)
 				else:
 					values.append(1)
