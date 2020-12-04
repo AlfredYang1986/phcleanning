@@ -387,12 +387,12 @@ def spec_standify(df):
 	df = df.withColumn("SPEC", upper(df.SPEC))
 	df = df.replace(" ", "")
 	# df = df.withColumn("SPEC_gross", regexp_extract('SPEC', spec_regex, 2))
-	# 拆分规格的成分
+	# 拆分规格的成分s
 	df = df.withColumn("SPEC_percent", regexp_extract('SPEC', r'(\d+%)', 1))
 	df = df.withColumn("SPEC_co", regexp_extract('SPEC', r'(CO)', 1))
 	spec_valid_regex =  r'([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)'
 	df = df.withColumn("SPEC_valid", regexp_extract('SPEC', spec_valid_regex, 1))
-	spec_gross_regex =  r'([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)[ /:∶+\s]([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)'
+	spec_gross_regex =  r'([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)[ ,/:∶+\s][\u4e00-\u9fa5]*([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)'
 	df = df.withColumn("SPEC_gross", regexp_extract('SPEC', spec_gross_regex, 2))
 	spec_third_regex = r'([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)[ /:∶+\s]([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)[ /:∶+\s]([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)'
 	df = df.withColumn("SPEC_third", regexp_extract('SPEC', spec_third_regex, 3))
@@ -820,15 +820,12 @@ def second_round_with_col_recalculate(df_second_round, dosage_mapping, df_encode
 						otherwise(df_second_round.MASTER_DOSAGE))
 	df_second_round = df_second_round.withColumn("EFFTIVENESS_DOSAGE_SE", dosage_replace(df_second_round.MASTER_DOSAGE, \
 														df_second_round.DOSAGE_STANDARD, df_second_round.EFFTIVENESS_DOSAGE)) 
-	df_second_round = df_second_round.withColumn("EFFTIVENESS_PACK_QTY_SE", pack_replace(df_second_round.EFFTIVENESS_PACK_QTY, df_second_round.SPEC_ORIGINAL, \
-														df_second_round.PACK_QTY, df_second_round.PACK_QTY_STANDARD))
 	df_second_round = mnf_encoding_index(df_second_round, df_encode)
 	df_second_round = mnf_encoding_cosine(df_second_round)
 	df_second_round = df_second_round.withColumn("EFFTIVENESS_MANUFACTURER_SE", \
 										when(df_second_round.COSINE_SIMILARITY >= df_second_round.EFFTIVENESS_MANUFACTURER, df_second_round.COSINE_SIMILARITY) \
 										.otherwise(df_second_round.EFFTIVENESS_MANUFACTURER))
 	df_second_round = mole_dosage_calculaltion(df_second_round)   # 加一列EFF_MOLE_DOSAGE，doubletype
-	
 	df_second_round = df_second_round.withColumn("EFFTIVENESS_PRODUCT_NAME_SE", \
 								prod_name_replace(df_second_round.EFFTIVENESS_MOLE_NAME, df_second_round.EFFTIVENESS_MANUFACTURER_SE, \
 												df_second_round.EFFTIVENESS_PRODUCT_NAME, df_second_round.MOLE_NAME, \
