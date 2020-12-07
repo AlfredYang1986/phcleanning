@@ -334,6 +334,7 @@ def transfer_unit_pandas_udf(value):
 						"MIU": "U",
 						"M": "U",
 						"Y": "MG",
+						"MC": "MC",
 					}
 				try:
 					unit = unit_switch[unit]
@@ -360,11 +361,17 @@ def percent_pandas_udf(percent, valid, gross):
 	def percent_calculation(percent, valid, gross):
 		digit_regex = '\d+\.?\d*e?-?\d*?'
 		if percent != "" and valid != "" and gross == "":
-			num = int(percent.strip("%"))
+			num = float(percent.strip("%"))
 			value = re.findall(digit_regex, valid)[0]
 			unit = valid.strip(value)  # type = str
-			final_num = num*float(value)*0.01
-			result = str(final_num) + unit
+			if unit == "ML":
+				final_num = round(num*float(value)*10, 3)
+				result = str(final_num) + "MG"
+			elif unit == "MG":
+				final_num = num*float(value)*0.01
+				result = str(final_num) + "MG"
+			else:
+				result = unit
 
 		elif percent != "" and valid!= "" and gross != "":
 			result = ""
@@ -414,6 +421,28 @@ def spec_standify(df):
 	df = df.withColumn("SPEC", concat( "SPEC_percent", "SPEC_ept", "SPEC_valid", "SPEC_ept", "SPEC_gross", "SPEC_ept", "SPEC_third")) \
 					.drop("SPEC_ept", "SPEC_percent", "SPEC_co", "SPEC_valid", "SPEC_gross", "SPEC_pure_number", "SPEC_third")
 	return df
+
+@pandas_udf(StringType(), PandasUDFType.SCALAR)
+def dos_pandas_udf(valid, number, dos):
+	def dos_calculation(valid, number, dos):
+		digit_regex = r'\d*.*\d+'
+		if valid != "" and number != "" and dos != "":
+			number = int(float(number))
+			value = re.findall(digit_regex, valid)[0]
+			unit = valid.strip(value)  # type = str
+			final_num = round(number*float(value), 2)
+			result = str(final_num) + unit
+			# result = str(final_num)
+		else:
+			result = valid
+
+		return result
+
+	frame = { "number": number, "valid": valid, "dos": dos }
+	df = pd.DataFrame(frame)
+	df["RESULT"] = df.apply(lambda x: dos_calculation(x["valid"], x["number"], x["dos"]), axis=1)
+	return df["RESULT"]
+
 
 
 def similarity(df):
