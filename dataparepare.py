@@ -19,13 +19,13 @@ from pyspark.sql.types import *
 
 
 # raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/azsanofi_check"
-raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/raw_data2"
-split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.9/splitdata"
-training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.9/tmp/data2"
+# raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/raw_data2"
+# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.10/splitdata"
+# training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.10/tmp/data2"
 
-# raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/raw_data"
-# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.10/splitdata"
-# training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.10/tmp/data2"
+raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/raw_data"
+split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.12/splitdata"
+training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.12/tmp/data3"
 
 
 # raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/chc/raw_data"
@@ -62,12 +62,13 @@ def load_word_dict_encode(spark):
 读取标准表WW
 """
 def load_standard_prod(spark):
-	 df_standard = spark.read.parquet("s3a://ph-stream/common/public/prod/0.0.19") \
+	 df_standard = spark.read.parquet("s3a://ph-stream/common/public/prod/0.0.20") \
 					.select("PACK_ID",
 							  "MOLE_NAME_CH", "MOLE_NAME_EN",
 							  "PROD_DESC", "PROD_NAME_CH",
 							  "CORP_NAME_EN", "CORP_NAME_CH", "MNF_NAME_EN", "MNF_NAME_CH",
-							  "PCK_DESC", "DOSAGE", "SPEC", "PACK")
+							  "PCK_DESC", "DOSAGE", "SPEC", "PACK", \
+							  "SPEC_valid_digit", "SPEC_valid_unit", "SPEC_gross_digit", "SPEC_gross_unit")
 					# .drop("version")
 
 	 df_standard = df_standard.withColumnRenamed("PACK_ID", "PACK_ID_STANDARD") \
@@ -78,12 +79,17 @@ def load_standard_prod(spark):
 					.withColumnRenamed("MNF_NAME_EN", "MANUFACTURER_NAME_EN_STANDARD") \
 					.withColumnRenamed("DOSAGE", "DOSAGE_STANDARD") \
 					.withColumnRenamed("SPEC", "SPEC_STANDARD") \
-					.withColumnRenamed("PACK", "PACK_QTY_STANDARD")
+					.withColumnRenamed("PACK", "PACK_QTY_STANDARD") \
+					.withColumnRenamed("SPEC_valid_digit", "SPEC_valid_digit_STANDARD") \
+					.withColumnRenamed("SPEC_valid_unit", "SPEC_valid_unit_STANDARD") \
+					.withColumnRenamed("SPEC_gross_digit", "SPEC_gross_digit_STANDARD") \
+					.withColumnRenamed("SPEC_gross_unit", "SPEC_gross_unit_STANDARD")
 
 	 df_standard = df_standard.select("PACK_ID_STANDARD", "MOLE_NAME_STANDARD",
 										"PRODUCT_NAME_STANDARD", "CORP_NAME_STANDARD",
 										"MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_EN_STANDARD",
-										"DOSAGE_STANDARD", "SPEC_STANDARD", "PACK_QTY_STANDARD")
+										"DOSAGE_STANDARD", "SPEC_STANDARD", "PACK_QTY_STANDARD", \
+										"SPEC_valid_digit_STANDARD", "SPEC_valid_unit_STANDARD", "SPEC_gross_digit_STANDARD", "SPEC_gross_unit_STANDARD")
 
 	 # df_standard.show()
 	 # df_standard.printSchema()

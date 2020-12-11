@@ -44,6 +44,7 @@ import pkuseg
 from nltk.metrics import edit_distance as ed
 from nltk.metrics import jaccard_distance as jd
 # from nltk.metrics import jaro_winkler_similarity as jws
+import math
 
 
 def dosage_standify(df):
@@ -286,69 +287,110 @@ def efftiveness_with_jaro_winkler_similarity(mo, ms, po, ps, do, ds, so, ss, qo,
 										], axis=1)
 	return df["RESULT"]
 
+@pandas_udf(StringType(), PandasUDFType.SCALAR)
+def spec_valid_std_transfer_pandas_udf(value):
+	
+	def digit_addition(spec_str):
+		lst = spec_str.split(",")
+		value_total = 0.0
+		# if (lst[0] == "nan") | (len(lst) == 0):
+		if len(lst) <= 1:
+			value = "0.0"
+		else:
+			# try:
+			for num in lst:
+				num = float(num)
+				value_total = (value_total + num)
+				value  = str(value_total)
+			# except:
+			# 	value = 0.0
+		return value
+				
+	frame = { "SPEC": value }
+	df = pd.DataFrame(frame)
+	df["RESULT"] = df["SPEC"].apply(digit_addition)
+	return df["RESULT"]
 
 @pandas_udf(StringType(), PandasUDFType.SCALAR)
 def transfer_unit_pandas_udf(value):
+	def unit_trans(value, unit):
+		# value transform
+		if unit == "G" or unit == "GM":
+			value = value *1000
+		elif unit == "UG" or unit == "UG/DOS":
+			value = value /1000
+		elif unit == "L":
+			value = value *1000
+		elif unit == "TU" or unit == "TIU":
+			value = value *10000
+		elif unit == "MU" or unit == "MIU" or unit == "M":
+			value = value *1000000
+		elif (unit == "Y"):
+			value = value /1000
+			
+		# value = round(value, 1)
+
+		# unit transform
+		unit_switch = {
+				"G": "MG",
+				"GM": "MG",
+				"MG": "MG",
+				"UG": "MG",
+				"L": "ML",
+				"AXAU": "U",
+				"AXAIU": "U",
+				"IU": "U",
+				"TU": "U",
+				"TIU": "U",
+				"MU": "U",
+				"MIU": "U",
+				"M": "U",
+				"Y": "MG",
+				"MC": "MC",
+			}
+		try:
+			unit = unit_switch[unit]
+		except KeyError:
+			pass
+		return value, unit
+	
+	
 	def unit_transform(spec_str):
 		spec_str = spec_str.replace(" ", "")
 		# 拆分数字和单位
 		digit_regex = '\d+\.?\d*e?-?\d*?'
 		# digit_regex = '0.\d*'
-		try:
-			if spec_str != "":
-				value = re.findall(digit_regex, spec_str)[0]
+		# try:
+		if spec_str != "":
+			values = re.findall(digit_regex, spec_str)
+			if len(values) == 1:
+				value = values[0]
 				unit = spec_str.strip(value)  # type = str
-				# value = float(value)  # type = float
-				try:
+				value = float(value)  # type = float
+				value = unit_trans(value, unit)[0]
+				unit = unit_trans(value, unit)[1]
+			elif len(values) >= 2:
+				# unit = unit
+				# value = 12222
+				value_result = ""
+				unit_regex = '[A-Z]+\d*'
+				unit = re.findall(unit_regex, spec_str)[0]
+				# value = "000"
+				for value in values:
 					value = float(value)  # type = float
-				except ValueError:
-					value = 0.0
+					value = unit_trans(value, unit)[0]
+					value_result = value_result + str(value) + ","
+				unit = unit_trans(value, unit)[1]
+				value = value_result.strip(",")
+				
+		else:
+			unit = ""
+			value = ""
 
-				# value transform
-				if unit == "G" or unit == "GM":
-					value = value *1000
-				elif unit == "UG" or unit == "UG/DOS":
-					value = value /1000
-				elif unit == "L":
-					value = value *1000
-				elif unit == "TU" or unit == "TIU":
-					value = value *10000
-				elif unit == "MU" or unit == "MIU" or unit == "M":
-					value = value *1000000
-				elif (unit == "Y"):
-					value = value /1000
+		return str(value) + unit
 
-				# unit transform
-				unit_switch = {
-						"G": "MG",
-						"GM": "MG",
-						"MG": "MG",
-						"UG": "MG",
-						"L": "ML",
-						"AXAU": "U",
-						"AXAIU": "U",
-						"IU": "U",
-						"TU": "U",
-						"TIU": "U",
-						"MU": "U",
-						"MIU": "U",
-						"M": "U",
-						"Y": "MG",
-						"MC": "MC",
-					}
-				try:
-					unit = unit_switch[unit]
-				except KeyError:
-					pass
-
-			else:
-				unit = ""
-				value = ""
-
-			return str(value) + unit
-
-		except Exception:
-			return spec_str
+		# except Exception:
+		# 	return spec_str
 
 	frame = { "SPEC": value }
 	df = pd.DataFrame(frame)
@@ -861,3 +903,158 @@ def second_round_with_col_recalculate(df_second_round, dosage_mapping, df_encode
 												df_second_round.PRODUCT_NAME_STANDARD, df_second_round.EFF_MOLE_DOSAGE))
 												
 	return df_second_round
+	
+@pandas_udf(DoubleType(), PandasUDFType.SCALAR)
+def spec_eff_int_or_carry(SPEC_valid_digit_STANDARD, SPEC_valid_total_ORIGINAL, SPEC_valid_unit_STANDARD, SPEC_valid_unit, SPEC_valid_total_STANDARD, EFFTIVENESS_SPEC_SPLIT):
+
+	frame = { "SPEC_valid_digit_STANDARD": SPEC_valid_digit_STANDARD, "SPEC_valid_total_ORIGINAL": SPEC_valid_total_ORIGINAL,
+			  "SPEC_valid_unit_STANDARD": SPEC_valid_unit_STANDARD,  "SPEC_valid_unit": SPEC_valid_unit, 
+			  "SPEC_valid_total_STANDARD": SPEC_valid_total_STANDARD, "EFFTIVENESS_SPEC_SPLIT": EFFTIVENESS_SPEC_SPLIT}
+	df = pd.DataFrame(frame)
+	
+	
+	# try:
+	df["EFFTIVENESS_SPEC_SPLIT"] = df.apply(lambda x: 0.99 if ((int(float(x["SPEC_valid_total_ORIGINAL"])) == int(float(x["SPEC_valid_total_STANDARD"]))) \
+														& (x["SPEC_valid_unit_STANDARD"] == x["SPEC_valid_unit"])) \
+													else 0.999 if ((math.ceil(float(x["SPEC_valid_total_ORIGINAL"])) == math.ceil(float(x["SPEC_valid_total_STANDARD"]))) \
+														& (x["SPEC_valid_unit_STANDARD"] == x["SPEC_valid_unit"])) \
+											else x["EFFTIVENESS_SPEC_SPLIT"], axis=1)
+	# except ValueError:
+	# 	df["EFFTIVENESS_SPEC_SPLIT"] = df.apply(lambda x: 0.888, axis=1)
+
+	return df["EFFTIVENESS_SPEC_SPLIT"]
+
+
+def spec_split_matching(df):
+	df.printSchema()
+	
+	df = df.withColumn("SPEC_valid_total_STANDARD",  spec_valid_std_transfer_pandas_udf(df.SPEC_valid_digit_STANDARD))
+	
+	# df = df.drop("SPEC_valid_digit_STANDARD", "SPEC_valid_unit_STANDARD", "SPEC_gross_digit_STANDARD", "SPEC_gross_unit_STANDARD", "SPEC_STANDARD")
+
+	
+	df = df.withColumn("SPEC", regexp_replace("SPEC", r"(万)", "T"))
+	df = df.withColumn("SPEC", regexp_replace("SPEC", r"(μ)", "U"))
+	df = df.withColumn("SPEC", upper(df.SPEC))
+	df = df.replace(" ", "")
+	# df = df.where(df.SPEC_STANDARD == "62.5UG+25UG/DOS 30")
+	# df = df.withColumn("SPEC_gross", regexp_extract('SPEC', spec_regex, 2))
+	# 拆分规格的成分
+	# df = df.withColumn("SPEC_percent", regexp_extract('SPEC', r'(\d*.*\d+%)', 1))
+	# df = df.withColumn("SPEC_co", regexp_extract('SPEC', r'(CO)', 1))
+	spec_valid_regex =  r'([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)'
+	df = df.withColumn("SPEC_valid", regexp_extract('SPEC', spec_valid_regex, 1))
+	spec_gross_regex =  r'([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)[ ,/:∶+\s][\u4e00-\u9fa5]*([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)'
+	df = df.withColumn("SPEC_gross", regexp_extract('SPEC', spec_gross_regex, 2))
+	
+	spec_valid_se_regex =  r'([0-9]\d*\.?\d*\s*[:/+][0-9]\d*\.?\d*\s*[A-Za-z]+)'
+	df = df.withColumn("SPEC_valid_2", regexp_extract('SPEC', spec_valid_se_regex, 1))
+	df = df.withColumn("SPEC_valid", when((df.SPEC_valid_2 != ""), df.SPEC_valid_2).otherwise(df.SPEC_valid))
+	# df = df.drop("SPEC_valid_2")
+	
+	# spec_third_regex = r'([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)[ /:∶+\s]([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)[ /:∶+\s]([0-9]\d*\.?\d*\s*[A-Za-z]*/?\s*[A-Za-z]+)'
+	# df = df.withColumn("SPEC_third", regexp_extract('SPEC', spec_third_regex, 3))
+
+	# pure_number_regex_spec = r'(\s\d+$)'
+	# df = df.withColumn("SPEC_pure_number", regexp_extract('SPEC', pure_number_regex_spec, 1))
+	# dos_regex_spec = r'(/DOS)'
+	# df = df.withColumn("SPEC_dos", regexp_extract('SPEC', dos_regex_spec, 1))
+
+	
+	# df = df.withColumn("SPEC_valid", dos_pandas_udf(df.SPEC_valid, df.SPEC_pure_number, df.SPEC_dos))
+	
+	# 单位转换
+	df = df.withColumn("SPEC_valid", transfer_unit_pandas_udf(df.SPEC_valid))
+	df = df.withColumn("SPEC_gross", transfer_unit_pandas_udf(df.SPEC_gross))
+	df = df.drop("SPEC_gross_digit", "SPEC_gross_unit", "SPEC_valid_digit", "SPEC_valid_unit")
+	# df = df.withColumn("SPEC_percent", percent_pandas_udf(df.SPEC_percent, df.SPEC_valid, df.SPEC_gross))
+	
+	df = df.na.fill("")
+	df.show()
+	
+	# 把百分号补充到有效成分列中
+	# df = df.withColumn("SPEC_percent", lit(""))
+	# df = df.withColumn("SPEC_gross", when(((df.SPEC_gross == "") & (df.SPEC_valid != "")), df.SPEC_valid).otherwise(df.SPEC_gross))
+	# df = df.withColumn("SPEC_valid", when((df.SPEC_percent != ""), df.SPEC_percent).otherwise(df.SPEC_valid))
+	# df = df.withColumn("SPEC_valid", when((df.SPEC_valid == df.SPEC_gross), lit("")).otherwise(df.SPEC_valid))
+	
+	# 拆分成四列
+	# digit_regex_spec = r'(\d+\.?\d*e?-?\d*?)'
+	
+	# df = df.withColumn("SPEC_valid_digit", regexp_extract('SPEC_valid', digit_regex_spec, 1))
+	# df = df.withColumn("SPEC_valid_unit", regexp_replace('SPEC_valid', digit_regex_spec, ""))
+	
+	# df = df.withColumn("SPEC_gross_digit", regexp_extract('SPEC_gross', digit_regex_spec, 1))
+	# df = df.withColumn("SPEC_gross_unit", regexp_replace('SPEC_gross', digit_regex_spec, ""))
+	# df = df.na.fill("")
+	# df.show()
+	
+	unit_regex_spec = r'([A-Z]+\d*)'
+	
+	df = df.withColumn("SPEC_valid_unit", regexp_extract('SPEC_valid', unit_regex_spec, 1))
+	df = df.withColumn("SPEC_valid_digit", regexp_replace('SPEC_valid', unit_regex_spec, ""))
+	
+	df = df.withColumn("SPEC_gross_unit", regexp_extract('SPEC_gross', unit_regex_spec, 1))
+	df = df.withColumn("SPEC_gross_digit", regexp_replace('SPEC_gross', unit_regex_spec, ""))
+	df = df.withColumn("SPEC_valid_total_ORIGINAL",  spec_valid_std_transfer_pandas_udf(df.SPEC_valid_digit))
+	
+	df = df.na.fill("")
+	df.select("SPEC_valid_digit", "SPEC_valid_total_ORIGINAL", "SPEC_valid_digit_STANDARD", "SPEC_valid_total_STANDARD").show()
+	# df.show()
+	
+	# 开始计算effectiveness的逻辑
+	df = df.withColumn("EFFTIVENESS_SPEC_SPLIT", lit(0))
+	# 1. 如果 【四列】分别都相等，则eff为1
+	df = df.withColumn("EFFTIVENESS_SPEC_SPLIT", when( \
+						((df.SPEC_valid_digit_STANDARD == df.SPEC_valid_digit) & (df.SPEC_valid_unit_STANDARD == df.SPEC_valid_unit) \
+						& (df.SPEC_gross_digit_STANDARD == df.SPEC_gross_digit) & (df.SPEC_gross_unit_STANDARD == df.SPEC_gross_unit)), \
+						lit(1))\
+						.otherwise(df.EFFTIVENESS_SPEC_SPLIT))
+	# df = df.where(df.EFFTIVENESS_SPEC_SPLIT == 0)
+	
+	# 2. 如果original/standard【只有valid/只有gross】，且仅有的部分是可以对应的，则eff为1
+	df = df.withColumn("EFFTIVENESS_SPEC_SPLIT", when( \
+						((df.SPEC_valid_digit == "") & (df.SPEC_valid_unit == "") \
+						& ((df.SPEC_gross_digit_STANDARD == df.SPEC_gross_digit) & (df.SPEC_gross_unit_STANDARD == df.SPEC_gross_unit)) \
+						| ((df.SPEC_valid_digit_STANDARD == df.SPEC_gross_digit) & (df.SPEC_valid_unit_STANDARD == df.SPEC_gross_unit))), \
+						lit(1))\
+						.otherwise(df.EFFTIVENESS_SPEC_SPLIT))
+	df = df.withColumn("EFFTIVENESS_SPEC_SPLIT", when( \
+						((df.SPEC_gross_digit == "") & (df.SPEC_gross_unit == "") \
+						& ((df.SPEC_valid_digit_STANDARD == df.SPEC_valid_digit) & (df.SPEC_valid_unit_STANDARD == df.SPEC_valid_unit)) \
+						| ((df.SPEC_gross_digit_STANDARD == df.SPEC_valid_digit) & (df.SPEC_gross_unit_STANDARD == df.SPEC_valid_unit))), \
+						lit(1))\
+						.otherwise(df.EFFTIVENESS_SPEC_SPLIT))
+						
+	# 3.如果【总量两列】 = 【有效成分两列】& 【有效成分两列】= 【总量两列】，则eff为1
+	df = df.withColumn("EFFTIVENESS_SPEC_SPLIT", when( \
+						((df.SPEC_valid_digit_STANDARD == df.SPEC_gross_digit) & (df.SPEC_valid_unit_STANDARD == df.SPEC_gross_unit) \
+						& (df.SPEC_gross_digit_STANDARD == df.SPEC_valid_digit) & (df.SPEC_gross_unit_STANDARD == df.SPEC_valid_unit)), \
+						lit(1))\
+						.otherwise(df.EFFTIVENESS_SPEC_SPLIT))
+						
+	# 4. 如果【源数据valid == 标准数据valid之和】，则eff为1
+	df = df.withColumn("EFFTIVENESS_SPEC_SPLIT", when( \
+						((df.SPEC_valid_total_STANDARD == df.SPEC_valid_digit) & (df.SPEC_valid_unit_STANDARD == df.SPEC_valid_unit)), \
+						lit(1))\
+						.otherwise(df.EFFTIVENESS_SPEC_SPLIT))
+	df.show()
+	df.printSchema()
+	# df.withColumn("SPEC_valid_total_STANDARD", when(df.SPEC_valid_total_STANDARD == "nan", lit("")).otherwise(df.SPEC_valid_total_STANDARD))
+	# df = df.where(df.SPEC == "CO 1.003 GM")
+	# 5. 一些骚操作（目前是针对azsanofi的）：
+	# 如果 【源数据有效成分 == 标准有效成分的取整值/四舍五入值】，则eff为0.99
+	# df = df.withColumn("EFFTIVENESS_SPEC_SPLIT", when(df.EFFTIVENESS_SPEC_SPLIT == 1, df.EFFTIVENESS_SPEC_SPLIT) \
+	# 											.otherwise(spec_eff_int_or_carry(df.SPEC_valid_digit_STANDARD, df.SPEC_valid_total_ORIGINAL, df.SPEC_valid_unit_STANDARD, \
+	# 																df.SPEC_valid_unit, df.SPEC_valid_total_STANDARD, df.EFFTIVENESS_SPEC_SPLIT)))
+	# df = df.withColumn("EFFTIVENESS_SPEC_SPLIT", when(df.SPEC.contains("162.5"), lit(0.999999)). \
+	# 											otherwise(df.EFFTIVENESS_SPEC_SPLIT ))
+	
+	
+	
+	df.show()
+	df.printSchema()
+
+	
+	return df
+	

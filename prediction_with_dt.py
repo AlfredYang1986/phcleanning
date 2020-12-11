@@ -59,8 +59,8 @@ if __name__ == '__main__':
 	resultid = df_result.select("id").distinct()
 	resultid_lst = resultid.toPandas()["id"].tolist()
 	df_lost = df_all.where(~df_all.id.isin(resultid_lst))  # 第一步就丢失了的数据
-	# df_lost.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.10/lost")
-	# print("丢失条目写入完成")
+	df_lost.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.1202/lost")
+	print("丢失条目写入完成")
 
 	# 2. load model
 	# model = PipelineModel.load("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/dt")
@@ -76,7 +76,7 @@ if __name__ == '__main__':
 	# 4. Test with Pharbers defined methods
 	result = predictions
 	result_similarity = similarity(result)
-	result_similarity.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.8/for_analysis")
+	result_similarity.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.1202/for_analysis")
 	print("用于分析的的条目写入完成")
 	result = result.withColumn("JACCARD_DISTANCE_MOLE_NAME", result.JACCARD_DISTANCE[0]) \
 				.withColumn("JACCARD_DISTANCE_DOSAGE", result.JACCARD_DISTANCE[1]) \
