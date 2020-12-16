@@ -59,12 +59,12 @@ if __name__ == '__main__':
 	resultid = df_result.select("id").distinct()
 	resultid_lst = resultid.toPandas()["id"].tolist()
 	df_lost = df_all.where(~df_all.id.isin(resultid_lst))  # 第一步就丢失了的数据
-	df_lost.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.1202/lost")
-	print("丢失条目写入完成")
+	# df_lost.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.10/lost")
+	# print("丢失条目写入完成")
 
 	# 2. load model
 	# model = PipelineModel.load("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/dt")
-	model = PipelineModel.load("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.2/model")
+	model = PipelineModel.load("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.4/model")
 
 	# 3. compute accuracy on the test set
 	predictions = model.transform(df_validate)
@@ -76,8 +76,8 @@ if __name__ == '__main__':
 	# 4. Test with Pharbers defined methods
 	result = predictions
 	result_similarity = similarity(result)
-	result_similarity.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.1202/for_analysis")
-	print("用于分析的的条目写入完成")
+	# result_similarity.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/chc/0.0.5/for_analysis2")
+	# print("用于分析的的条目写入完成")
 	result = result.withColumn("JACCARD_DISTANCE_MOLE_NAME", result.JACCARD_DISTANCE[0]) \
 				.withColumn("JACCARD_DISTANCE_DOSAGE", result.JACCARD_DISTANCE[1]) \
 				.drop("JACCARD_DISTANCE", "indexedFeatures").drop("rawPrediction", "probability")
@@ -139,7 +139,7 @@ if __name__ == '__main__':
 	# print("第二轮写入完成")
 	count_prediction_se = df_candidate.groupBy("id").agg({"label": "first"}).count()
 	print("第二轮总量= " + str(count_prediction_se))
-	model = PipelineModel.load("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.3/model_without_prod")
+	model = PipelineModel.load("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.4/model_without_prod")
 	assembler = VectorAssembler( \
 					inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_SPEC",\
 								"EFFTIVENESS_PACK_QTY", "EFFTIVENESS_MANUFACTURER"], \
