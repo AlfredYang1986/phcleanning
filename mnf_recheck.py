@@ -51,15 +51,17 @@ def prepare():
 if __name__ == '__main__':
 	spark = prepare()
 
-	df_mnf_recheck = spark.read.parquet("s3a://ph-max-auto/2020-08-11/data_matching/airflow_runs/1608288548/prediction_report_division/mnf_check_path/ca1796")
+	df_mnf_recheck = spark.read.parquet("s3a://ph-max-auto/2020-08-11/data_matching/airflow_runs/1609240316/prediction_report_division/mnf_check_path/105bde")
 	print(df_mnf_recheck.count())
 
 	windowSpec = Window.orderBy(desc("COSINE_SIMILARITY"))
 	df_mnf_recheck = df_mnf_recheck.withColumn("RANK", rank().over(windowSpec))
-	df_mnf_recheck = df_mnf_recheck.where((df_mnf_recheck.RANK < 300) & (df_mnf_recheck.RANK >= 200))
+	df_mnf_recheck = df_mnf_recheck.where((df_mnf_recheck.RANK < 500) & (df_mnf_recheck.RANK >= 400))
 
 	# df_high_scroe_word = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/high_word_seg")
 	# df_high_scroe_word.printSchema()
 
 	# df_mnf_recheck.select("MANUFACTURER_NAME", "MANUFACTURER_NAME_CLEANNING_WORDS_SEG", "MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_STANDARD_WORDS_SEG", "COSINE_SIMILARITY").show(truncate=False)
-	df_mnf_recheck.select("MANUFACTURER_NAME", "MANUFACTURER_NAME_CLEANNING_WORDS_SEG", "MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_STANDARD_WORDS_SEG", "COSINE_SIMILARITY").show(100, truncate=False)
+	# df_mnf_recheck.select("MANUFACTURER_NAME", "MANUFACTURER_NAME_CLEANNING_WORDS_SEG", "MANUFACTURER_NAME_STANDARD", "MANUFACTURER_NAME_STANDARD_WORDS_SEG", "COSINE_SIMILARITY").show(100, truncate=False)
+
+	df_mnf_recheck.printSchema()
