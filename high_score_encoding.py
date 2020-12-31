@@ -91,7 +91,7 @@ if __name__ == '__main__':
 	df2.show()
 	xixi1=df2.toPandas()
 	xixi1.to_excel('high_word_seg_zyyin2.xlsx', index = False)
-	df2.repartition(1).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/high_word_seg")
+	# df2.repartition(1).write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/high_word_seg")
 	print(df2.count())
 	print(df.select(df.HIGH_WORD).distinct().count())
 	print(df.count())

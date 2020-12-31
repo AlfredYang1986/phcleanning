@@ -97,7 +97,7 @@ def training(df):
 	treeModel = model.stages[2]
 	# summary only
 	print(treeModel)
-	model.write().overwrite().save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.3/model_without_mnf")
+	model.write().overwrite().save("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.4/model_without_prod")
 	print(treeModel.toDebugString)
 	
 	
@@ -119,24 +119,24 @@ if __name__ == '__main__':
 	# treeModel_without_spec = training(df_training_without_spec)
 	
 	# 去掉厂商
-	df_training_without_mnf = df_training.where(((df_training.EFFTIVENESS_MANUFACTURER <= 0.6) | (df_training.EFFTIVENESS_PACK_QTY == 0)) & (df_training.label == 0)).drop("features")
-	assembler = VectorAssembler( \
-					inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_SPEC",\
-								"EFFTIVENESS_PACK_QTY",], \
-					outputCol="features")
-	df_training_without_mnf = assembler.transform(df_training_without_mnf)
+	# df_training_without_mnf = df_training.where(((df_training.EFFTIVENESS_MANUFACTURER <= 0.6) | (df_training.EFFTIVENESS_PACK_QTY == 0)) & (df_training.label == 0)).drop("features")
+	# assembler = VectorAssembler( \
+	# 				inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_PRODUCT_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_SPEC",\
+	# 							"EFFTIVENESS_PACK_QTY",], \
+	# 				outputCol="features")
+	# df_training_without_mnf = assembler.transform(df_training_without_mnf)
 	
-	df_training_without_mnf = training(df_training_without_mnf)
+	# df_training_without_mnf = training(df_training_without_mnf)
 	
 	# # 去掉产品名
-	# df_training_without_prod = df_training.drop("features")
-	# assembler = VectorAssembler( \
-	# 				inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_SPEC",\
-	# 							"EFFTIVENESS_PACK_QTY", "EFFTIVENESS_MANUFACTURER"], \
-	# 				outputCol="features")
-	# df_training_without_prod = assembler.transform(df_training_without_prod)
+	df_training_without_prod = df_training.drop("features")
+	assembler = VectorAssembler( \
+					inputCols=["EFFTIVENESS_MOLE_NAME", "EFFTIVENESS_DOSAGE", "EFFTIVENESS_SPEC",\
+								"EFFTIVENESS_PACK_QTY", "EFFTIVENESS_MANUFACTURER"], \
+					outputCol="features")
+	df_training_without_prod = assembler.transform(df_training_without_prod)
 	
-	# df_training_without_prod = training(df_training_without_prod)
+	df_training_without_prod = training(df_training_without_prod)
 	
 	
 	# 去掉分子名
