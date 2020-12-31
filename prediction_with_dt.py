@@ -28,7 +28,7 @@ def prepare():
 		.appName("CPA&GYC match refactor") \
 		.config("spark.driver.memory", "1g") \
 		.config("spark.executor.cores", "2") \
-		.config("spark.executor.instances", "4") \
+		.config("spark.executor.instances", "2") \
 		.config("spark.executor.memory", "2g") \
 		.config('spark.sql.codegen.wholeStage', False) \
 		.getOrCreate()
@@ -63,7 +63,6 @@ if __name__ == '__main__':
 	# print("丢失条目写入完成")
 
 	# 2. load model
-	# model = PipelineModel.load("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/alfred/dt")
 	model = PipelineModel.load("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.4/model")
 
 	# 3. compute accuracy on the test set
@@ -76,7 +75,7 @@ if __name__ == '__main__':
 	# 4. Test with Pharbers defined methods
 	result = predictions
 	result_similarity = similarity(result)
-	# result_similarity.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/chc/0.0.5/for_analysis2")
+	# result_similarity.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.15/for_analysis4")
 	# print("用于分析的的条目写入完成")
 	result = result.withColumn("JACCARD_DISTANCE_MOLE_NAME", result.JACCARD_DISTANCE[0]) \
 				.withColumn("JACCARD_DISTANCE_DOSAGE", result.JACCARD_DISTANCE[1]) \

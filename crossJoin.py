@@ -32,11 +32,10 @@ import pandas as pd
 # result_path_3 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/chc/0.0.5/tmp/data3"
 
 
-# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.12/splitdata"
-# training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.12/tmp/data3"
-result_path_1 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.12/tmp/data1"
-result_path_2 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.12/tmp/data2"
-result_path_3 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.12/tmp/data4"
+split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.15/splitdata"
+result_path_1 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.15/tmp/data1"
+result_path_2 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.15/tmp/data7"
+# result_path_3 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.12/tmp/data4"
 
 # split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.10/splitdata"
 # result_path_1 = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.10/tmp/data1"
@@ -137,7 +136,7 @@ if __name__ == '__main__':
 	# df_result.show(10)
 
 
-	# # 5. edit_distance is not very good for normalization probloms
+	# # # 5. edit_distance is not very good for normalization probloms
 	# # we use jaro_winkler_similarity instead
 	# # if not good enough, change back to edit distance
 	# df_result = df_result.withColumn("EFFTIVENESS", \
@@ -167,7 +166,7 @@ if __name__ == '__main__':
 	df_second_round = spark.read.parquet(result_path_1)
 	df_second_round.printSchema()
 	df_second_round = df_second_round.withColumnRenamed("EFFTIVENESS_SPEC", "EFFTIVENESS_SPEC_FIRST")
-	df_second_round = second_round_with_col_recalculate(df_second_round, df_dosage_mapping, df_encode)
+	df_second_round = second_round_with_col_recalculate(df_second_round, df_dosage_mapping, df_encode, spark)
 	# spec拆列之后的匹配算法
 	df_second_round = spec_split_matching(df_second_round)
 	df_second_round.printSchema()
@@ -194,5 +193,5 @@ if __name__ == '__main__':
 					when((df_result.PACK_ID_CHECK_NUM > 0) & (df_result.PACK_ID_STANDARD_NUM > 0) & (df_result.PACK_ID_CHECK_NUM == df_result.PACK_ID_STANDARD_NUM), 1.0).otherwise(0.0)) \
 					.drop("PACK_ID_CHECK_NUM", "PACK_ID_STANDARD_NUM")
 
-	df_result.repartition(10).write.mode("overwrite").parquet(result_path_3)
+	df_result.repartition(10).write.mode("overwrite").parquet(result_path_2)
 	print("第二轮完成，写入完成")

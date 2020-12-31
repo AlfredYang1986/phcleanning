@@ -24,8 +24,8 @@ from pyspark.sql.types import *
 # training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.10/tmp/data2"
 
 raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/raw_data"
-split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.12/splitdata"
-training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.12/tmp/data4"
+split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.15/splitdata"
+training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.15/tmp/data7"
 
 
 # raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/chc/raw_data"
@@ -55,7 +55,7 @@ training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azs
 
 
 def load_word_dict_encode(spark):
-	df_encode = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/word_dict/0.0.4")
+	df_encode = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/word_dict/0.0.12")
 	return df_encode
 
 """
@@ -102,7 +102,7 @@ def load_standard_prod(spark):
 """
 def load_cleanning_prod(spark):
 	 #df_cleanning = spark.read.parquet("s3a://ph-stream/common/public/pfizer_check").drop("version")
-	 df_cleanning = spark.read.parquet(raw_data_path).drop("version")
+	 df_cleanning = spark.read.parquet(raw_data_path).drop("version")  #.limit(3000)
 
 	 # 为了验证算法，保证id尽可能可读性，投入使用后需要删除
 	 df_cleanning = df_cleanning.repartition(1).withColumn("id", monotonically_increasing_id())
@@ -119,7 +119,7 @@ def load_cleanning_prod(spark):
 """
 def modify_pool_cleanning_prod(spark):
 	 # df_cleanning = spark.read.parquet("s3a://ph-stream/common/public/pfizer_check").drop("version")
-	 df_cleanning = spark.read.parquet(raw_data_path)
+	 df_cleanning = spark.read.parquet(raw_data_path)  #.limit(3000)
 
 	 # 为了验证算法，保证id尽可能可读性，投入使用后需要删除
 	 df_cleanning = df_cleanning.repartition(1).withColumn("id", monotonically_increasing_id())
