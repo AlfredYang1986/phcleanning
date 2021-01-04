@@ -19,13 +19,13 @@ from pyspark.sql.types import *
 
 
 # raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/azsanofi_check"
-# raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/raw_data2"
-# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.10/splitdata"
-# training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.10/tmp/data2"
+raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/raw_data2"
+split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.11/splitdata"
+training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/qilu/0.0.11/tmp/data2"
 
-raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/raw_data"
-split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.15/splitdata"
-training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.15/tmp/data7"
+# raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/raw_data"
+# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.15/splitdata"
+# training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.15/tmp/data7"
 
 
 # raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/chc/raw_data"
@@ -49,9 +49,9 @@ training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azs
 # split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.2/splitdata"
 # training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/pfizer_model/0.0.2/tmp/data2"
 
-# raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/eia/raw_data"
-# split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/eia/0.0.2/splitdata"
-# training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/eia/0.0.2/tmp/data2"
+raw_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/eia/raw_data_2"
+split_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/eia/0.0.3/splitdata"
+training_data_path = "s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/eia/0.0.3/tmp/data2"
 
 
 def load_word_dict_encode(spark):

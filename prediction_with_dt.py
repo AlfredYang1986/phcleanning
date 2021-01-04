@@ -75,7 +75,7 @@ if __name__ == '__main__':
 	# 4. Test with Pharbers defined methods
 	result = predictions
 	result_similarity = similarity(result)
-	# result_similarity.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.15/for_analysis4")
+	# result_similarity.write.mode("overwrite").parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/0.0.15/for_analysis7")
 	# print("用于分析的的条目写入完成")
 	result = result.withColumn("JACCARD_DISTANCE_MOLE_NAME", result.JACCARD_DISTANCE[0]) \
 				.withColumn("JACCARD_DISTANCE_DOSAGE", result.JACCARD_DISTANCE[1]) \

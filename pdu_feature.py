@@ -859,11 +859,16 @@ def mnf_index_word_cosine_similarity(o, v):
 	def array_to_vector(arr):
 		idx = []
 		values = []
-		s = list(set(arr))
+		# try:
+		if type(arr) != np.ndarray:
+			s = [8999,]
+		# except AttributeError:
+		else:
+			s = list(set(arr))
 		s.sort()
 		for item in s:
 			if isnan(item):
-				idx.append(7999)
+				idx.append(8999)
 				values.append(1)
 				break
 			else:
