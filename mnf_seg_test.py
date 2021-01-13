@@ -34,7 +34,7 @@ def execute():
 		
 	spark = SparkSession.builder \
 		.master("yarn") \
-		.appName("data from s3") \
+		.appName("zyyintest") \
 		.config("spark.driver.memory", "1g") \
 		.config("spark.executor.cores", "1") \
 		.config("spark.executor.instance", "1") \
@@ -54,8 +54,8 @@ def execute():
 # 	df = spark.read.parquet("s3a://ph-max-auto/2020-08-11/BPBatchDAG/refactor/zyyin/azsanofi/raw_data")
 # 	df = spec_standify(df)  
 # 	df.show()
-	cpa_test = [("1", "1", u"Kowa Company, Ltd., Nagoya Factory （JA）", "", "0.0125 MIU 2 ML", u"日本兴和株式会社", 1, "辉瑞", ), 
-	("2", "2", u"Patheon Italia S.p.A. （IT）",["利多","卡因"], "2% 20ML", u"比利时优时比制药公司", 1, "辉瑞", )]
+	cpa_test = [("1", "1", u"Kowa Company, Ltd., Nagoya Factory （JA）", "", "0.0125 MIU 2 ML", u"", 1, "辉瑞", ), 
+	("2", "2", u"比利时优时比",["利多","卡因"], "2% 20ML", u"比利时优时比制药公司", 1, "辉瑞", )]
 	cpa_schema = StructType([StructField('COMPANY',StringType(),True),
 		StructField('SOURCE',StringType(),True),
 		StructField('MANUFACTURER_NAME',StringType(),True),
@@ -68,8 +68,10 @@ def execute():
 	cpa_test_df.show()
 	df_encode = load_word_dict_encode(spark) 
 	cpa_test_df = mnf_encoding_index(cpa_test_df, df_encode, spark)
+	print("变成index 结束")
 	cpa_test_df = mnf_encoding_cosine(cpa_test_df)
 	cpa_test_df.show()
+	print("cosine similarity 结束")
 	
 	cpa_test_df = cpa_test_df.withColumn("JACCARD_DISTANCE", \
 				efftiveness_with_jaccard_distance( \
